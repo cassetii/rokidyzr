@@ -98,6 +98,40 @@ Kolom **Catatan/data** di Pengaturan diisi hal yang boleh dipakai Claude untuk m
 terlihat di kacamata. Makin kecil, makin banyak teks yang muat.
 **Panjang jawaban**: ringkas / sedang / detail — sesuaikan dengan ukuran teks yang dipilih.
 
+### Catatan pribadi = jawaban instan tanpa API (versi 0.5)
+
+Tombol **Catatan** di HP untuk memuat satu file `.md`/`.txt`. Saat ada ucapan yang cocok dengan isi
+catatan, baris `▸` langsung muncul di HUD — **lokal, tanpa internet, tanpa biaya**, dalam hitungan
+milidetik (600 entri tercari dalam ~2 ms). Claude tetap dipakai hanya untuk penalaran (MAKSUD/TANGGAPI).
+
+Format catatan yang dikenali:
+
+```markdown
+# Pasang 2 PK
+Rp 600.000 per unit, termasuk bracket, belum termasuk pipa.
+
+# Hotel Empress kamar 305
+Daikin FTKQ25, kompresor terbakar, disurvei 12 Agustus.
+```
+
+Daftar sederhana juga bisa, satu baris satu entri:
+
+```
+Pasang 1 PK: Rp 450.000
+Cuci AC: Rp 85.000
+```
+
+**Catatan tersimpan permanen** di penyimpanan privat aplikasi (`catatan.md`) dan dimuat ulang
+otomatis setiap aplikasi dibuka — cukup unggah sekali. Unggah ulang file yang sama untuk memperbarui isinya.
+
+**Jeda selesai bicara (default 5 detik).** Mesin suara Android sering memotong kalimat di jeda pendek.
+Aplikasi mengumpulkan potongan-potongan itu dan baru menganggap ucapan selesai setelah benar-benar
+sunyi selama jeda yang diatur, jadi HUD tidak menyela di tengah kalimat orang. Atur 0–10 detik
+di Pengaturan (0 = tampil seketika, tanpa menunggu).
+
+Pencocokan mengerti imbuhan ("garansinya" → "garansi") dan membedakan angka ("1 PK" vs "2 PK").
+Obrolan biasa tidak memicu apa-apa karena ada ambang skor.
+
 **Etika & hukum:** Mode Dengar merekam suara lawan bicara. Untuk urusan bisnis sendiri umumnya wajar,
 apalagi bila Anda memberi tahu. Untuk rapat internal bank atau pihak ketiga, rekaman menyangkut
 kerahasiaan dan UU PDP — pakai Mode Tanya saja.

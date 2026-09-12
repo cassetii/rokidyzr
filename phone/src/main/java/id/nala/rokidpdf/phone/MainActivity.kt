@@ -31,6 +31,7 @@ import android.widget.Toast
 import id.nala.rokidpdf.common.AskText
 import id.nala.rokidpdf.common.Hello
 import id.nala.rokidpdf.common.HudCfg
+import id.nala.rokidpdf.common.NoteIndex
 import id.nala.rokidpdf.common.Preview
 import id.nala.rokidpdf.common.PreviewCodec
 import id.nala.rokidpdf.common.Proto
@@ -66,6 +67,7 @@ class MainActivity : Activity(), PhoneLink.Listener {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         buildUi()
+        loadSavedNotes()
         PhoneLink.listener = this
         if (hasBtPermission()) PhoneLink.start(this) else requestBtPermission()
         PhoneLink.hello?.let { onHello(it) }
@@ -101,6 +103,7 @@ class MainActivity : Activity(), PhoneLink.Listener {
             addView(btn("Buka PDF") { pickPdf() })
             addView(btn("Tanya") { toggleAsk() })
             addView(btn("Dengar") { toggleListen() })
+            addView(btn("Catatan") { pickNotes() })
             addView(btn("⚙") { showSettings() })
         }
         canvasView = PdfCanvasView(this).apply {
@@ -174,7 +177,12 @@ class MainActivity : Activity(), PhoneLink.Listener {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQ_PICK && resultCode == RESULT_OK) data?.data?.let { loadPdf(it) }
+        if (resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        when (requestCode) {
+            REQ_PICK -> loadPdf(uri)
+            REQ_NOTES -> loadNotes(uri)
+        }
     }
 
     /** Salin ke cache sambil menghitung sidik jari (SHA-256), lalu buka. */
@@ -265,6 +273,7 @@ class MainActivity : Activity(), PhoneLink.Listener {
         ask?.let { return it }
         val a = AskSession(this, prefs, object : AskSession.Output {
             override fun status(text: String) = hud(Proto.TEXT_STATUS, text, false)
+            override fun note(text: String) = hud(Proto.TEXT_NOTE, text, false)
             override fun heard(text: String, final: Boolean) = hud(Proto.TEXT_HEARD, text, false)
             override fun answerDelta(text: String) = hud(Proto.TEXT_ANSWER, text, true)
             override fun answerDone(ms: Long) {
@@ -316,6 +325,41 @@ class MainActivity : Activity(), PhoneLink.Listener {
         askSession().toggleListenMode()
     }
 
+    private fun pickNotes() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/markdown", "text/plain", "application/octet-stream"))
+        }
+        startActivityForResult(intent, REQ_NOTES)
+    }
+
+    private fun loadNotes(uri: Uri) {
+        Thread {
+            try {
+                val teks = contentResolver.openInputStream(uri)!!.bufferedReader().use { it.readText() }
+                File(filesDir, "catatan.md").writeText(teks)
+                val idx = NoteIndex.fromMarkdown(teks)
+                runOnUiThread {
+                    askSession().notes = idx
+                    statusText.text = "Catatan dimuat: ${idx.entries.size} entri"
+                }
+            } catch (e: Exception) {
+                runOnUiThread { statusText.text = "Gagal membaca catatan: ${e.message}" }
+            }
+        }.start()
+    }
+
+    /** Muat ulang catatan yang tersimpan saat aplikasi dibuka. */
+    private fun loadSavedNotes() {
+        val f = File(filesDir, "catatan.md")
+        if (!f.exists()) return
+        Thread {
+            val idx = try { NoteIndex.fromMarkdown(f.readText()) } catch (e: Exception) { null }
+            if (idx != null) runOnUiThread { askSession().notes = idx }
+        }.start()
+    }
+
     private fun kirimCfg() = PhoneLink.sendCfg(HudCfg(prefs.textSp, prefs.invert))
 
     private fun hasMicPermission() =
@@ -357,6 +401,27 @@ class MainActivity : Activity(), PhoneLink.Listener {
                 override fun onStopTrackingTouch(sb: SeekBar?) {}
             })
         }
+        val jedaLabel = TextView(this).apply { text = labelJeda() }
+        val jedaBar = SeekBar(this).apply {
+            max = 10
+            progress = prefs.jedaDetik
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar?, value: Int, fromUser: Boolean) {
+                    prefs.jedaDetik = value
+                    jedaLabel.text = labelJeda()
+                }
+                override fun onStartTrackingTouch(sb: SeekBar?) {}
+                override fun onStopTrackingTouch(sb: SeekBar?) {}
+            })
+        }
+        val analisisBtn = Button(this).apply {
+            isAllCaps = false
+            text = labelAnalisis()
+            setOnClickListener {
+                prefs.selaluAnalisis = !prefs.selaluAnalisis
+                text = labelAnalisis()
+            }
+        }
         val panjangBtn = Button(this).apply {
             isAllCaps = false
             text = labelPanjang()
@@ -378,6 +443,9 @@ class MainActivity : Activity(), PhoneLink.Listener {
             orientation = LinearLayout.VERTICAL
             setPadding((20 * dp).toInt(), (16 * dp).toInt(), (20 * dp).toInt(), 0)
             addView(keyField)
+            addView(jedaLabel)
+            addView(jedaBar)
+            addView(analisisBtn)
             addView(modelBtn)
             addView(panjangBtn)
             addView(ukuranLabel)
@@ -396,6 +464,15 @@ class MainActivity : Activity(), PhoneLink.Listener {
             .setNegativeButton("Batal", null)
             .show()
     }
+
+    private fun labelJeda(): String {
+        val d = prefs.jedaDetik
+        return if (d == 0) "Jeda selesai bicara: langsung (0 detik)"
+        else "Jeda selesai bicara: $d detik"
+    }
+
+    private fun labelAnalisis() =
+        if (prefs.selaluAnalisis) "Claude: selalu dipanggil" else "Claude: hanya bila catatan tak cocok"
 
     private fun labelPanjang() = "Panjang jawaban: " + when (prefs.panjang) {
         0 -> "ringkas"
@@ -477,5 +554,6 @@ class MainActivity : Activity(), PhoneLink.Listener {
         private const val REQ_PICK = 1
         private const val REQ_BT = 2
         private const val REQ_MIC = 3
+        private const val REQ_NOTES = 4
     }
 }

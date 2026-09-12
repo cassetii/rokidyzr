@@ -49,6 +49,7 @@ class MainActivity : Activity(), GlassesLink.Listener {
     private lateinit var askStatus: TextView
     private lateinit var askHeard: TextView
     private lateinit var askAnswer: TextView
+    private lateinit var askNote: TextView
     private lateinit var renderer: PdfHudRenderer
 
     private var asking = false
@@ -103,6 +104,12 @@ class MainActivity : Activity(), GlassesLink.Listener {
             setTextColor(Color.WHITE); textSize = 13f
             setLineSpacing(0f, 1.05f)
         }
+        // Baris catatan pribadi: muncul seketika saat ucapan cocok dengan catatan Anda.
+        askNote = TextView(this).apply {
+            setTextColor(Color.WHITE); textSize = 12f
+            setPadding(0, 2, 0, 4)
+            visibility = View.GONE
+        }
         askScroll = ScrollView(this).apply { addView(askAnswer) }
         askBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -111,6 +118,7 @@ class MainActivity : Activity(), GlassesLink.Listener {
             visibility = View.GONE
             addView(askStatus)
             addView(askHeard)
+            addView(askNote)
             addView(askScroll, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         }
@@ -218,7 +226,11 @@ class MainActivity : Activity(), GlassesLink.Listener {
         showAsk(true)
         when (t.kind) {
             Proto.TEXT_STATUS -> askStatus.text = t.text
-            Proto.TEXT_HEARD -> { askHeard.text = "\u201c${t.text}\u201d"; askAnswer.text = "" }
+            Proto.TEXT_HEARD -> askHeard.text = "\u201c${t.text}\u201d"
+            Proto.TEXT_NOTE -> {
+                askNote.text = "\u25B8 ${t.text}"
+                askNote.visibility = View.VISIBLE
+            }
             Proto.TEXT_ANSWER -> {
                 if (t.append) askAnswer.append(t.text) else askAnswer.text = t.text
                 askScroll.post { askScroll.fullScroll(View.FOCUS_DOWN) }
@@ -232,6 +244,7 @@ class MainActivity : Activity(), GlassesLink.Listener {
     private fun applyCfg(c: HudCfg) {
         val sp = c.textSp.coerceIn(8, 26).toFloat()
         askAnswer.textSize = sp
+        askNote.textSize = (sp - 1f).coerceAtLeast(8f)
         askHeard.textSize = (sp - 2f).coerceAtLeast(8f)
         askStatus.textSize = (sp - 3f).coerceAtLeast(7f)
         if (c.invert != inverted) toggleInvert()
@@ -308,6 +321,7 @@ class MainActivity : Activity(), GlassesLink.Listener {
             askStatus.text = "Menyiapkan…"
             askHeard.text = ""
             askAnswer.text = ""
+            askNote.visibility = View.GONE
         }
     }
 

@@ -135,6 +135,58 @@ fun main() {
     check(pIdx in 1 until endIdx, "pratinjau terkirim DI TENGAH file (posisi $pIdx dari $endIdx)")
     src.close(); sink.close()
 
+    // --- Pencocokan catatan lokal (tanpa AI)
+    val catatan = """
+    # Harga pasang AC 2026
+    Pasang 1 PK Rp 450.000. Pasang 2 PK Rp 600.000. Sudah termasuk bracket, belum termasuk pipa.
+
+    # Pipa dan bongkar pasang
+    Pipa 1/4-3/8 Rp 180.000 per meter terpasang. Bongkar pasang Rp 350.000 per unit.
+
+    # Hotel Empress kamar 305
+    Daikin FTKQ25 indoor mati total, kompresor terbakar, disurvei 12 Agustus.
+
+    # Garansi
+    Garansi pemasangan 3 bulan. Garansi kompresor ikut pabrik 5 tahun.
+    """.trimIndent()
+    val idx = NoteIndex.fromMarkdown(catatan)
+    check(idx.entries.size == 4, "markdown terpecah jadi ${idx.entries.size} entri")
+
+    val t0 = System.nanoTime()
+    val h1 = idx.cari("kalau pasang yang 2 pk berapa harganya")
+    val us = (System.nanoTime() - t0) / 1000
+    check(h1.isNotEmpty() && h1[0].entry.title.contains("Harga"), "cocok ke entri Harga (dapat: ${h1.firstOrNull()?.entry?.title})")
+    check(us < 50_000, "pencocokan cepat: ${us} mikrodetik")
+
+    check(idx.cari("bongkar pasangnya dihitung terpisah ya")[0].entry.title.contains("Pipa"), "cocok ke entri Pipa/bongkar")
+    check(idx.cari("unit di kamar 305 itu bagaimana")[0].entry.title.contains("305"), "angka kamar mencocokkan entri yang tepat")
+    check(idx.cari("garansinya berapa lama")[0].entry.title.contains("Garansi"), "cocok ke Garansi")
+    check(idx.cari("besok kita makan siang di mana").isEmpty(), "obrolan biasa tidak memicu apa-apa")
+    check(idx.cari("ya").isEmpty(), "kata pendek tidak memicu")
+    check(h1[0].entry.ringkas(80).length <= 80, "ringkasan dipotong sesuai lebar HUD")
+
+    // format daftar sederhana tanpa heading
+    val daftar = NoteIndex.fromMarkdown("Pasang 1 PK: Rp 450.000\nPasang 2 PK: Rp 600.000\nCuci AC: Rp 85.000")
+    check(daftar.entries.size == 3, "daftar tanpa heading jadi ${daftar.entries.size} entri")
+    check(daftar.cari("berapa cuci ac")[0].entry.body.contains("85.000"), "daftar sederhana ikut cocok")
+
+    // bedakan 1 PK vs 2 PK
+    val hargaIdx = NoteIndex.fromMarkdown(
+        "# Pasang 1 PK\nBiaya Rp 450.000 per unit.\n\n# Pasang 2 PK\nBiaya Rp 600.000 per unit.")
+    check(hargaIdx.cari("saya mau pasang 2 pk")[0].entry.title.contains("2 PK"), "bedakan 2 PK dari 1 PK")
+    check(hargaIdx.cari("kalau 1 pk saja")[0].entry.title.contains("1 PK"), "bedakan 1 PK dari 2 PK")
+
+    // catatan besar tetap instan
+    val besar = StringBuilder()
+    for (i in 1..600) besar.append("# Pelanggan $i Blok ${'A' + (i % 26)}\nUnit Daikin tipe FTKQ${20 + i % 40}, servis terakhir bulan ${i % 12 + 1}.\n\n")
+    val idxBesar = NoteIndex.fromMarkdown(besar.toString())
+    check(idxBesar.entries.size == 600, "indeks besar: ${idxBesar.entries.size} entri")
+    val t1 = System.nanoTime()
+    repeat(20) { idxBesar.cari("pelanggan 317 pakai tipe apa") }
+    val perCari = (System.nanoTime() - t1) / 20 / 1_000_000.0
+    check(idxBesar.cari("pelanggan 317 pakai tipe apa")[0].entry.title.contains("317"), "temukan pelanggan 317 dari 600 entri")
+    check(perCari < 30.0, "600 entri dicari dalam ${"%.1f".format(perCari)} ms (target < 30 ms)")
+
     phone.close(); glasses.close()
     println("\nSEMUA TES LULUS")
 }

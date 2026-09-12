@@ -48,6 +48,7 @@ object Proto {
     const val TEXT_STATUS = 0     // baris status kecil ("mendengarkan…")
     const val TEXT_HEARD = 1      // apa yang terdengar
     const val TEXT_ANSWER = 2     // jawaban Claude (dikirim bertahap)
+    const val TEXT_NOTE = 3       // cocokan dari catatan pribadi (lokal, instan)
 
     const val CHUNK_SIZE = 16 * 1024
     const val MAX_FRAME = 1 shl 20
