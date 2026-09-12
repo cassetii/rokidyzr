@@ -16,7 +16,10 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import id.nala.rokidpdf.common.AskText
 import id.nala.rokidpdf.common.Proto
 import id.nala.rokidpdf.common.ViewState
 import java.io.File
@@ -40,7 +43,14 @@ class MainActivity : Activity(), GlassesLink.Listener {
     private lateinit var statusText: TextView
     private lateinit var infoText: TextView
     private lateinit var pageText: TextView
+    private lateinit var askBox: LinearLayout
+    private lateinit var askScroll: ScrollView
+    private lateinit var askStatus: TextView
+    private lateinit var askHeard: TextView
+    private lateinit var askAnswer: TextView
     private lateinit var renderer: PdfHudRenderer
+
+    private var asking = false
 
     private var hasFrame = false
     @Volatile private var sharpDocId: String? = null   // dokumen yang sudah dirender tajam
@@ -81,12 +91,28 @@ class MainActivity : Activity(), GlassesLink.Listener {
             setBackgroundColor(Color.BLACK); setPadding(12, 4, 12, 4)
             visibility = View.GONE
         }
+        askStatus = TextView(this).apply { setTextColor(Color.WHITE); textSize = 14f }
+        askHeard = TextView(this).apply { setTextColor(Color.WHITE); textSize = 16f }
+        askAnswer = TextView(this).apply { setTextColor(Color.WHITE); textSize = 22f }
+        askScroll = ScrollView(this).apply { addView(askAnswer) }
+        askBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+            setPadding(16, 16, 16, 16)
+            visibility = View.GONE
+            addView(askStatus)
+            addView(askHeard)
+            addView(askScroll, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+
         val wrap = FrameLayout.LayoutParams.WRAP_CONTENT
         val match = FrameLayout.LayoutParams.MATCH_PARENT
         val root = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             addView(image, FrameLayout.LayoutParams(match, match))
             addView(statusText, FrameLayout.LayoutParams(match, match))
+            addView(askBox, FrameLayout.LayoutParams(match, match))
             addView(infoText, FrameLayout.LayoutParams(wrap, wrap, Gravity.TOP or Gravity.START))
             addView(pageText, FrameLayout.LayoutParams(wrap, wrap, Gravity.BOTTOM or Gravity.END))
         }
@@ -179,17 +205,79 @@ class MainActivity : Activity(), GlassesLink.Listener {
 
     override fun onView(v: ViewState) = renderer.request(v)
 
+    override fun onText(t: AskText) {
+        showAsk(true)
+        when (t.kind) {
+            Proto.TEXT_STATUS -> askStatus.text = t.text
+            Proto.TEXT_HEARD -> { askHeard.text = "\u201c${t.text}\u201d"; askAnswer.text = "" }
+            Proto.TEXT_ANSWER -> {
+                if (t.append) askAnswer.append(t.text) else askAnswer.text = t.text
+                askScroll.post { askScroll.fullScroll(View.FOCUS_DOWN) }
+                if (t.done) { asking = false; askStatus.text = "Ketuk untuk tanya lagi · tahan untuk tutup" }
+            }
+        }
+    }
+
+    /** Tampilkan/sembunyikan panel tanya-jawab di atas tampilan PDF. */
+    private fun showAsk(show: Boolean) {
+        askBox.visibility = if (show) View.VISIBLE else View.GONE
+        if (show) statusText.visibility = View.GONE
+    }
+
     // ---------- Touchpad ----------
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // Ketuk tengah  : mulai/berhenti bicara (tanya Claude)
+        // Tahan tengah  : tutup panel tanya, atau ganti mode warna saat panel tertutup
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+            if (event.repeatCount == 0) event.startTracking()
+            return true
+        }
         val action = when (keyCode) {
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> Proto.NAV_FORWARD
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_PAGE_UP -> Proto.NAV_BACK
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { toggleInvert(); return true }
             else -> return super.onKeyDown(keyCode, event)
         }
         if (!GlassesLink.sendNav(action)) showStatus("HP tidak terhubung")
         return true
+    }
+
+    override fun onKeyLongPress(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+            if (askBox.visibility == View.VISIBLE) {
+                GlassesLink.sendAsk(Proto.ASK_CANCEL)
+                asking = false
+                showAsk(false)
+            } else {
+                toggleInvert()
+            }
+            return true
+        }
+        return super.onKeyLongPress(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) &&
+            !event.isCanceled && event.eventTime - event.downTime < 600
+        ) {
+            askPressed()
+            return true
+        }
+        return super.onKeyUp(keyCode, event)
+    }
+
+    private fun askPressed() {
+        if (!GlassesLink.sendAsk(if (asking) Proto.ASK_STOP else Proto.ASK_START)) {
+            showStatus("HP tidak terhubung")
+            return
+        }
+        asking = !asking
+        showAsk(true)
+        if (asking) {
+            askStatus.text = "Menyiapkan…"
+            askHeard.text = ""
+            askAnswer.text = ""
+        }
     }
 
     private fun toggleInvert() {

@@ -62,6 +62,31 @@ Cara SPP ini juga dipakai proyek komunitas seperti GlassTube dan rokid-Strava.
 | Geser mundur / atas | Gulir ke atas; di puncak halaman kembali ke halaman sebelumnya |
 | Ketuk | Ganti mode warna (terbalik ⇄ normal), berguna untuk PDF bergambar |
 
+## Tanya-jawab suara ke Claude (versi 0.3)
+
+Ketuk touchpad kacamata → bicara → ketuk lagi untuk berhenti → jawaban Claude mengalir di HUD.
+
+Alur: mikrofon HP → pengenalan suara Android → Claude API (streaming) → HUD kacamata.
+Model default **Haiku 4.5** (cepat & murah); bisa diganti ke **Sonnet 5** di Pengaturan untuk
+pertanyaan yang lebih berat. Jawaban dibatasi 2 kalimat agar muat di layar kacamata.
+
+**Sebelum dipakai:** buka aplikasi HP → tombol **⚙** → isi **API key** dari
+https://console.anthropic.com (biaya API terpisah dari langganan Claude.ai).
+Key disimpan di penyimpanan privat aplikasi di HP — tidak pernah masuk ke kode atau GitHub.
+
+Kolom **Catatan/data** di Pengaturan diisi hal yang boleh dipakai Claude untuk menjawab
+(mis. daftar harga, spesifikasi). Isinya ikut terkirim ke API setiap pertanyaan.
+
+**Kontrol touchpad saat panel tanya terbuka:**
+
+| Gerakan | Aksi |
+|---|---|
+| Ketuk | Mulai bicara / berhenti bicara |
+| Tahan | Tutup panel tanya (kembali ke PDF) |
+
+**Catatan kecepatan:** total jeda ±1,5–3 detik dari selesai bicara sampai kata pertama muncul.
+Pengenalan suara memakai mesin bawaan Android dan butuh internet di HP.
+
 ## Troubleshooting
 
 - **Kacamata terus "Mencari aplikasi di HP…"**: pastikan aplikasi di HP terbuka dan statusnya "Menunggu kacamata",
@@ -76,6 +101,10 @@ Cara SPP ini juga dipakai proyek komunitas seperti GlassTube dan rokid-Strava.
 - **"Aplikasi tidak terpasang" saat update**: sejak versi 0.2 APK ditandatangani dengan kunci tetap
   (`keystore/`). Hapus sekali aplikasi versi lama, lalu pasang yang baru. Update berikutnya bisa langsung ditimpa.
 - **PDF berpassword** tidak bisa dibuka (batasan `PdfRenderer` bawaan Android).
+- **"API key belum diisi"**: isi lewat tombol ⚙ di aplikasi HP.
+- **"Pengenalan suara tidak tersedia"**: HP tidak punya mesin suara (biasanya perlu Google app aktif).
+- **Ketukan touchpad tidak memicu tanya**: lihat kode tombol dengan `adb logcat | grep -i key`,
+  lalu sesuaikan `onKeyUp`/`onKeyLongPress` di `glasses/.../MainActivity.kt`.
 
 ## Menguji logika bersama (tanpa perangkat)
 

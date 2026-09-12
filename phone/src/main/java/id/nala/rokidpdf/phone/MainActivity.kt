@@ -2,6 +2,7 @@ package id.nala.rokidpdf.phone
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -17,13 +18,18 @@ import android.provider.OpenableColumns
 import android.view.Gravity
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.text.InputType
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import id.nala.rokidpdf.common.AskText
 import id.nala.rokidpdf.common.Hello
 import id.nala.rokidpdf.common.Preview
-import id.nala.rokidpdf.common.PreviewCodec
+import id.nala.rokidpdf.common.Proto
+import id.nala.rokidpdf.common.Preview
+import id.nala.rokidpdf.common.ProtoCodec
 import id.nala.rokidpdf.common.ViewState
 import java.io.File
 import java.security.MessageDigest
@@ -45,8 +51,12 @@ class MainActivity : Activity(), PhoneLink.Listener {
     private var lastPreviewAt = 0L
     private val previewRunnable = Runnable { sendPreviewNow() }
 
+    private lateinit var prefs: Prefs
+    private var ask: AskSession? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        prefs = Prefs(this)
         buildUi()
         PhoneLink.listener = this
         if (hasBtPermission()) PhoneLink.start(this) else requestBtPermission()
@@ -56,6 +66,7 @@ class MainActivity : Activity(), PhoneLink.Listener {
 
     override fun onDestroy() {
         ui.removeCallbacks(previewRunnable)
+        ask?.release()
         encoder.shutdown()
         PhoneLink.listener = null
         closeRenderer()
@@ -80,7 +91,8 @@ class MainActivity : Activity(), PhoneLink.Listener {
             gravity = Gravity.CENTER_VERTICAL
             setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), 0)
             addView(btn("Buka PDF") { pickPdf() })
-            addView(btn("Kirim ulang") { doc?.let { PhoneLink.setDocument(it) } })
+            addView(btn("Tanya") { toggleAsk() })
+            addView(btn("⚙") { showSettings() })
         }
         canvasView = PdfCanvasView(this).apply {
             onViewportChanged = { page, x, y, w ->
@@ -214,6 +226,85 @@ class MainActivity : Activity(), PhoneLink.Listener {
         }
     }
 
+    // ---------- Tanya-jawab suara ----------
+
+    private fun askSession(): AskSession {
+        ask?.let { return it }
+        val a = AskSession(this, prefs, object : AskSession.Output {
+            override fun status(text: String) = hud(Proto.TEXT_STATUS, text, false)
+            override fun heard(text: String, final: Boolean) = hud(Proto.TEXT_HEARD, text, false)
+            override fun answerDelta(text: String) = hud(Proto.TEXT_ANSWER, text, true)
+            override fun answerDone(ms: Long) {
+                PhoneLink.sendText(AskText(Proto.TEXT_ANSWER, "", true, true))
+                statusText.text = "Jawaban selesai (${ms / 100 / 10f} detik)"
+            }
+            override fun error(text: String) {
+                hud(Proto.TEXT_STATUS, text, false)
+                statusText.text = text
+            }
+        })
+        ask = a
+        return a
+    }
+
+    private fun hud(kind: Int, text: String, append: Boolean) {
+        PhoneLink.sendText(AskText(kind, text, append, false))
+        if (kind != Proto.TEXT_ANSWER) statusText.text = text
+    }
+
+    private fun toggleAsk() {
+        if (!hasMicPermission()) { requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC); return }
+        val a = askSession()
+        if (a.isListening) a.stop() else a.start()
+    }
+
+    private fun hasMicPermission() =
+        checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    private fun showSettings() {
+        val dp = resources.displayMetrics.density
+        val keyField = EditText(this).apply {
+            hint = "API key (sk-ant-…)"
+            setText(prefs.apiKey)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        }
+        val konteksField = EditText(this).apply {
+            hint = "Catatan/data yang boleh dipakai menjawab (opsional)"
+            setText(prefs.konteks)
+            minLines = 3
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        val modelBtn = Button(this).apply {
+            isAllCaps = false
+            text = labelModel()
+            setOnClickListener {
+                prefs.model = if (prefs.model == ClaudeClient.MODEL_CEPAT) ClaudeClient.MODEL_PINTAR
+                else ClaudeClient.MODEL_CEPAT
+                text = labelModel()
+            }
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((20 * dp).toInt(), (16 * dp).toInt(), (20 * dp).toInt(), 0)
+            addView(keyField)
+            addView(modelBtn)
+            addView(konteksField)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Pengaturan")
+            .setView(box)
+            .setPositiveButton("Simpan") { _, _ ->
+                prefs.apiKey = keyField.text.toString()
+                prefs.konteks = konteksField.text.toString()
+                statusText.text = if (prefs.apiKey.isBlank()) "API key kosong" else "Pengaturan disimpan"
+            }
+            .setNegativeButton("Batal", null)
+            .show()
+    }
+
+    private fun labelModel() =
+        if (prefs.model == ClaudeClient.MODEL_CEPAT) "Model: cepat (Haiku 4.5)" else "Model: pintar (Sonnet 5)"
+
     // ---------- PhoneLink.Listener ----------
 
     override fun onStatus(text: String) { statusText.text = text }
@@ -241,6 +332,14 @@ class MainActivity : Activity(), PhoneLink.Listener {
 
     override fun onNav(action: Int) { canvasView.nav(action) }
 
+    override fun onAsk(action: Int) {
+        when (action) {
+            Proto.ASK_START -> toggleAsk()
+            Proto.ASK_STOP -> ask?.stop()
+            Proto.ASK_CANCEL -> ask?.cancelAll()
+        }
+    }
+
     // ---------- Izin ----------
 
     private fun hasBtPermission(): Boolean =
@@ -255,6 +354,11 @@ class MainActivity : Activity(), PhoneLink.Listener {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_MIC) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) toggleAsk()
+            else onStatus("Izin mikrofon ditolak, fitur Tanya tidak bisa dipakai")
+            return
+        }
         if (requestCode == REQ_BT) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) PhoneLink.start(this)
             else onStatus("Izin Bluetooth ditolak. Aplikasi tidak bisa tersambung ke kacamata.")
@@ -265,5 +369,6 @@ class MainActivity : Activity(), PhoneLink.Listener {
         private const val PREVIEW_INTERVAL_MS = 160L
         private const val REQ_PICK = 1
         private const val REQ_BT = 2
+        private const val REQ_MIC = 3
     }
 }

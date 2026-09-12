@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import id.nala.rokidpdf.common.AskText
 import id.nala.rokidpdf.common.Codec
 import id.nala.rokidpdf.common.Frame
 import id.nala.rokidpdf.common.FrameConnection
@@ -48,6 +49,7 @@ object GlassesLink {
         fun onConnection(connected: Boolean)
         /** Panggilan Bluetooth ditolak sistem: Activity diminta mengajukan izin runtime. */
         fun onPermissionNeeded(detail: String)
+        fun onText(t: AskText)
     }
 
     var listener: Listener? = null
@@ -202,6 +204,10 @@ object GlassesLink {
                 val v = Codec.readView(f)
                 main.post { listener?.onView(v) }
             }
+            Proto.T_TEXT -> {
+                val t = Codec.readText(f)
+                main.post { listener?.onText(t) }
+            }
             Proto.T_ERROR -> status("HP: ${Codec.readError(f)}")
         }
     }
@@ -319,6 +325,12 @@ object GlassesLink {
     fun sendNav(action: Int): Boolean {
         val c = conn ?: return false
         c.send(Codec.nav(action))
+        return true
+    }
+
+    fun sendAsk(action: Int): Boolean {
+        val c = conn ?: return false
+        c.send(Codec.ask(action))
         return true
     }
 

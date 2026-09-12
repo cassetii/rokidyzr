@@ -12,6 +12,7 @@ import id.nala.rokidpdf.common.Frame
 import id.nala.rokidpdf.common.FrameConnection
 import id.nala.rokidpdf.common.Hello
 import id.nala.rokidpdf.common.Offer
+import id.nala.rokidpdf.common.AskText
 import id.nala.rokidpdf.common.Preview
 import id.nala.rokidpdf.common.Proto
 import id.nala.rokidpdf.common.ViewState
@@ -44,6 +45,8 @@ object PhoneLink {
         fun onGlassesReady(docId: String, pageCount: Int)
         fun onTransfer(sent: Long, total: Long, via: String)
         fun onNav(action: Int)
+        /** Kacamata menekan touchpad: mulai/berhenti mendengarkan. */
+        fun onAsk(action: Int)
         /** Kacamata sedang menunggu file: kirim pratinjau posisi saat ini. */
         fun onPreviewWanted()
     }
@@ -163,6 +166,10 @@ object PhoneLink {
             Proto.T_NAV -> {
                 val action = Codec.readNav(f)
                 main.post { listener?.onNav(action) }
+            }
+            Proto.T_ASK -> {
+                val a = Codec.readAsk(f)
+                main.post { listener?.onAsk(a) }
             }
             Proto.T_ERROR -> status("Kacamata: ${Codec.readError(f)}")
         }
@@ -308,6 +315,11 @@ object PhoneLink {
     fun sendPreview(p: Preview) {
         if (!wantsPreview(p.docId)) return
         conn?.sendLatest(Codec.preview(p))
+    }
+
+    /** Kirim teks ke HUD. Potongan jawaban dikirim berurutan (bukan digabung). */
+    fun sendText(t: AskText) {
+        conn?.send(Codec.text(t))
     }
 
     fun sendView(v: ViewState) {

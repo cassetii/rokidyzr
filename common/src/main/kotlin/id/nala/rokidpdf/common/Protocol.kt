@@ -30,11 +30,21 @@ object Proto {
     const val T_WIFI_OFFER: Byte = 11 // HP -> kacamata : "ambil file lewat Wi-Fi di alamat ini"
     const val T_WIFI_FAIL: Byte = 12  // kacamata -> HP : Wi-Fi gagal, kirim lewat Bluetooth
     const val T_PREVIEW: Byte = 13    // HP -> kacamata : gambar pratinjau selama file belum lengkap
+    const val T_ASK: Byte = 14        // kacamata -> HP : mulai/berhenti mendengarkan
+    const val T_TEXT: Byte = 15       // HP -> kacamata : teks untuk HUD (status/ucapan/jawaban)
 
     const val NAV_FORWARD = 1       // gulir ke bawah (lanjut ke halaman berikut bila di dasar)
     const val NAV_BACK = 2          // gulir ke atas (mundur ke halaman sebelumnya bila di puncak)
     const val NAV_NEXT_PAGE = 3
     const val NAV_PREV_PAGE = 4
+
+    const val ASK_START = 1
+    const val ASK_STOP = 2
+    const val ASK_CANCEL = 3
+
+    const val TEXT_STATUS = 0     // baris status kecil ("mendengarkan…")
+    const val TEXT_HEARD = 1      // apa yang terdengar
+    const val TEXT_ANSWER = 2     // jawaban Claude (dikirim bertahap)
 
     const val CHUNK_SIZE = 16 * 1024
     const val MAX_FRAME = 1 shl 20
@@ -46,6 +56,13 @@ data class Hello(val version: Int, val screenW: Int, val screenH: Int)
 data class Offer(val docId: String, val name: String, val size: Long)
 data class Ready(val docId: String, val pageCount: Int)
 data class WifiOffer(val docId: String, val token: String, val port: Int, val ips: List<String>)
+
+/**
+ * Teks untuk HUD.
+ * [append] true = tambahkan ke teks sebelumnya (aliran jawaban), false = ganti.
+ * [done] true = jawaban selesai.
+ */
+data class AskText(val kind: Int, val text: String, val append: Boolean, val done: Boolean)
 
 /** Gambar pratinjau: [data] = hasil [PreviewCodec.encode]. */
 class Preview(val docId: String, val page: Int, val pageCount: Int, val w: Int, val h: Int, val data: ByteArray)
@@ -117,6 +134,17 @@ object Codec {
         val w = readInt(); val h = readInt()
         val data = ByteArray(readInt()); readFully(data)
         Preview(docId, page, count, w, h, data)
+    }
+
+    fun ask(action: Int) = Frame(Proto.T_ASK, build { writeInt(action) })
+    fun readAsk(f: Frame): Int = input(f).readInt()
+
+    fun text(t: AskText) = Frame(Proto.T_TEXT, build {
+        writeInt(t.kind); writeBoolean(t.append); writeBoolean(t.done); writeUTF(t.text.take(2000))
+    })
+    fun readText(f: Frame): AskText = input(f).run {
+        val kind = readInt(); val append = readBoolean(); val done = readBoolean()
+        AskText(kind, readUTF(), append, done)
     }
 
     fun error(msg: String) = Frame(Proto.T_ERROR, build { writeUTF(msg.take(500)) })
