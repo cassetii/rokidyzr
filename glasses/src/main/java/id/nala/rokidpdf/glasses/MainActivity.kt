@@ -9,6 +9,7 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -94,8 +95,10 @@ class MainActivity : Activity(), GlassesLink.Listener {
         renderer = PdfHudRenderer(w, h) { bmp, v, count -> runOnUiThread { showSharpFrame(bmp, v, count) } }
 
         GlassesLink.listener = this
-        if (hasBtPermission()) GlassesLink.start(this, w, h)
-        else requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), REQ_BT)
+        // Selalu mulai. Kalau sistem menolak, GlassesLink memanggil onPermissionNeeded()
+        // dan kita ajukan izin runtime saat itu juga, lalu proses mencoba lagi sendiri.
+        requestBtIfNeeded()
+        GlassesLink.start(this, w, h)
     }
 
     override fun onDestroy() {
@@ -196,22 +199,39 @@ class MainActivity : Activity(), GlassesLink.Listener {
 
     // ---------- Izin ----------
 
-    // Aplikasi ini menargetkan API 30: di Android 12 kacamata, izin Bluetooth lama sudah cukup
-    // dan diberikan otomatis saat instal. Pemeriksaan runtime hanya perlu bila target >= 31.
-    private fun hasBtPermission(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-            applicationInfo.targetSdkVersion < Build.VERSION_CODES.S ||
-            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+    private fun granted(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
+
+    /** Ajukan izin Bluetooth yang belum diberikan (aman dipanggil berkali-kali). */
+    private fun requestBtIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val need = listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
+            .filterNot { granted(it) }
+        if (need.isEmpty() || askedAt > 0L && SystemClock.uptimeMillis() - askedAt < 8000L) return
+        askedAt = SystemClock.uptimeMillis()
+        try { requestPermissions(need.toTypedArray(), REQ_BT) } catch (_: Exception) {}
+    }
+
+    override fun onPermissionNeeded(detail: String) = requestBtIfNeeded()
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_BT && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            val dm = resources.displayMetrics
-            GlassesLink.start(this, dm.widthPixels, dm.heightPixels)
-        } else {
-            showStatus("Izin Bluetooth ditolak.\nBeri izin lewat ADB (lihat README).")
-        }
+        if (requestCode != REQ_BT) return
+        val ok = grantResults.isNotEmpty() && grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+        if (!ok && !hasFrame) showStatus(diagnostics())
     }
 
-    companion object { private const val REQ_BT = 1 }
+    /** Ringkasan status izin — ditampilkan bila izin tetap ditolak, agar jelas apa yang kurang. */
+    private fun diagnostics(): String {
+        val c = if (granted(Manifest.permission.BLUETOOTH_CONNECT)) "OK" else "belum"
+        val b = if (granted(Manifest.permission.BLUETOOTH)) "OK" else "belum"
+        return "Izin Bluetooth ditolak\n" +
+            "BLUETOOTH: $b · CONNECT: $c\n" +
+            "target SDK ${applicationInfo.targetSdkVersion} · Android ${Build.VERSION.SDK_INT}\n" +
+            "Beri izin di Setelan aplikasi, atau lewat ADB."
+    }
+
+    companion object {
+        private const val REQ_BT = 1
+        private var askedAt = 0L
+    }
 }

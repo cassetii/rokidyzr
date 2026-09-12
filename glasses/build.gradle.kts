@@ -10,10 +10,12 @@ android {
     defaultConfig {
         applicationId = "id.nala.rokidpdf.glasses"
         minSdk = 28
-        // targetSdk 30: izin Bluetooth otomatis diberikan saat instal (tanpa dialog di kacamata)
+        // targetSdk 30: pada Android 12 izin BLUETOOTH lama otomatis dipetakan ke
+        // BLUETOOTH_CONNECT saat instal, jadi biasanya tanpa dialog di kacamata.
+        // Bila firmware tetap menolak, aplikasi mengajukan izin runtime sendiri.
         targetSdk = 30
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
     }
 
     // Kunci tanda tangan TETAP (bukan acak per build) supaya versi baru bisa dipasang

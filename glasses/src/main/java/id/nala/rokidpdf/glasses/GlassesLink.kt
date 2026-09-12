@@ -46,6 +46,8 @@ object GlassesLink {
         fun onView(v: ViewState)
         fun onPreview(docId: String, bitmap: Bitmap, page: Int, pageCount: Int)
         fun onConnection(connected: Boolean)
+        /** Panggilan Bluetooth ditolak sistem: Activity diminta mengajukan izin runtime. */
+        fun onPermissionNeeded(detail: String)
     }
 
     var listener: Listener? = null
@@ -136,8 +138,13 @@ object GlassesLink {
                 prefs.edit().putString(KEY_LAST, device.address).apply()
                 runSession(socket)
             } catch (e: SecurityException) {
-                status("Izin Bluetooth belum diberikan")
-                Thread.sleep(5000)
+                // Android menolak panggilan Bluetooth. Minta Activity mengajukan izin runtime,
+                // lalu coba lagi. Tampilkan detail supaya jelas izin mana yang kurang.
+                val detail = e.message?.take(120).orEmpty()
+                Log.w(TAG, "SecurityException: $detail", e)
+                main.post { listener?.onPermissionNeeded(detail) }
+                status("Menunggu izin Bluetooth…\n$detail")
+                Thread.sleep(4000)
             } catch (e: Exception) {
                 Log.w(TAG, "connect loop", e)
                 Thread.sleep(3000)

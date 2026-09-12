@@ -11,8 +11,8 @@ android {
         applicationId = "id.nala.rokidpdf.phone"
         minSdk = 28
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
     }
 
     // Kunci tanda tangan TETAP (bukan acak per build) supaya versi baru bisa dipasang
