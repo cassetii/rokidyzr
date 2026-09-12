@@ -202,6 +202,16 @@ Pengenalan suara memakai mesin bawaan Android dan butuh internet di HP.
 - **Ketukan touchpad tidak memicu tanya**: lihat kode tombol dengan `adb logcat | grep -i key`,
   lalu sesuaikan `onKeyUp`/`onKeyLongPress` di `glasses/.../MainActivity.kt`.
 
+## Pemeriksa kode sebelum build (tanpa Android SDK)
+
+`tools/cek-kode.py` memindai kesalahan yang sering lolos saat menyunting kode secara terprogram:
+konstanta yang dipakai tapi tak didefinisikan, import ganda atau hilang, anggota interface yang
+belum di-override, dan fungsi lokal yang dipanggil tapi sudah terhapus.
+
+```bash
+python3 tools/cek-kode.py    # keluar dengan kode 1 bila ada masalah
+```
+
 ## Menguji logika bersama (tanpa perangkat)
 
 Protokol, pengiriman file, penggabungan pesan, dan perhitungan zoom bisa diuji di komputer:

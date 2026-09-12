@@ -469,6 +469,10 @@ class MainActivity : Activity(), GlassesLink.Listener {
     }
 
     companion object {
+        /** Satu gerakan swipe sering terbaca berkali-kali oleh touchpad Rokid. */
+        private const val SWIPE_DEBOUNCE_MS = 700L
+        /** Jeda untuk membedakan ketukan tunggal dari ketukan ganda. */
+        private const val DOUBLE_TAP_MS = 300L
         private const val REQ_BT = 1
         private var askedAt = 0L
     }
