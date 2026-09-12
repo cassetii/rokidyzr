@@ -15,6 +15,7 @@ import id.nala.rokidpdf.common.Codec
 import id.nala.rokidpdf.common.Frame
 import id.nala.rokidpdf.common.FrameConnection
 import id.nala.rokidpdf.common.Hello
+import id.nala.rokidpdf.common.HudCfg
 import id.nala.rokidpdf.common.Offer
 import id.nala.rokidpdf.common.PreviewCodec
 import id.nala.rokidpdf.common.Proto
@@ -50,6 +51,7 @@ object GlassesLink {
         /** Panggilan Bluetooth ditolak sistem: Activity diminta mengajukan izin runtime. */
         fun onPermissionNeeded(detail: String)
         fun onText(t: AskText)
+        fun onCfg(c: HudCfg)
     }
 
     var listener: Listener? = null
@@ -207,6 +209,10 @@ object GlassesLink {
             Proto.T_TEXT -> {
                 val t = Codec.readText(f)
                 main.post { listener?.onText(t) }
+            }
+            Proto.T_CFG -> {
+                val c = Codec.readCfg(f)
+                main.post { listener?.onCfg(c) }
             }
             Proto.T_ERROR -> status("HP: ${Codec.readError(f)}")
         }

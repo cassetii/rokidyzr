@@ -11,6 +11,7 @@ import id.nala.rokidpdf.common.Codec
 import id.nala.rokidpdf.common.Frame
 import id.nala.rokidpdf.common.FrameConnection
 import id.nala.rokidpdf.common.Hello
+import id.nala.rokidpdf.common.HudCfg
 import id.nala.rokidpdf.common.Offer
 import id.nala.rokidpdf.common.AskText
 import id.nala.rokidpdf.common.Preview
@@ -316,6 +317,8 @@ object PhoneLink {
         if (!wantsPreview(p.docId)) return
         conn?.sendLatest(Codec.preview(p))
     }
+
+    fun sendCfg(c: HudCfg) { conn?.send(Codec.cfg(c)) }
 
     /** Kirim teks ke HUD. Potongan jawaban dikirim berurutan (bukan digabung). */
     fun sendText(t: AskText) {

@@ -26,13 +26,40 @@ object ClaudeClient {
     private const val VERSION = "2023-06-01"
     private const val TAG = "ClaudeClient"
 
-    /** Instruksi sistem: jawaban harus muat di layar kacamata yang kecil. */
-    const val SYSTEM_HUD =
-        "Kamu asisten yang jawabannya ditampilkan di layar kacamata pintar berukuran sangat kecil " +
-            "(sekitar 6 baris teks). Aturan wajib: jawab maksimal 2 kalimat pendek, langsung ke inti, " +
-            "tanpa basa-basi, tanpa markdown, tanpa daftar bernomor, tanpa tabel. " +
-            "Jawab dalam bahasa yang dipakai penanya. Kalau butuh angka, sebut angkanya saja. " +
-            "Kalau tidak tahu, katakan tidak tahu dalam satu kalimat."
+    private const val DASAR =
+        "Jawabanmu tampil di layar kacamata pintar yang kecil. Tanpa markdown, tanpa tabel, " +
+            "tanpa daftar bernomor, tanpa basa-basi. Pakai bahasa yang dipakai penanya. " +
+            "Kalau tidak tahu, katakan tidak tahu."
+
+    /** Mode tanya: pengguna bertanya langsung. */
+    fun systemTanya(panjang: Int): String = DASAR + " " + when (panjang) {
+        0 -> "Jawab maksimal 2 kalimat pendek."
+        2 -> "Jawab lengkap tapi padat, maksimal 8 kalimat."
+        else -> "Jawab maksimal 4 kalimat pendek."
+    }
+
+    /**
+     * Mode dengar: yang masuk adalah ucapan LAWAN BICARA, bukan pertanyaan untuk dijawab.
+     * Tugasnya membantu pengguna memahami dan menanggapi.
+     */
+    fun systemDengar(panjang: Int): String = DASAR +
+        " Teks yang kamu terima adalah ucapan lawan bicara pengguna dalam sebuah percakapan, " +
+        "bukan pertanyaan untukmu. Jangan menjawab seolah dia bicara padamu. " +
+        "Format jawaban tepat dua bagian, masing-masing satu baris:\n" +
+        "MAKSUD: inti ucapannya dalam satu kalimat.\n" +
+        "TANGGAPI: satu bantahan, pertanyaan balik, atau koreksi paling kuat yang bisa dipakai pengguna. " +
+        "Kalau ada angka atau klaim yang meragukan, tunjukkan di bagian TANGGAPI. " +
+        when (panjang) {
+            0 -> "Tiap baris maksimal 12 kata."
+            2 -> "Tiap baris boleh sampai 35 kata."
+            else -> "Tiap baris maksimal 20 kata."
+        }
+
+    fun maxTokens(panjang: Int): Int = when (panjang) {
+        0 -> 150
+        2 -> 600
+        else -> 300
+    }
 
     class Call {
         internal val cancelled = AtomicBoolean(false)
@@ -48,6 +75,8 @@ object ClaudeClient {
         model: String,
         question: String,
         context: String?,
+        system: String,
+        maxTokens: Int,
         onDelta: (String) -> Unit,
         onDone: () -> Unit,
         onError: (String) -> Unit,
@@ -56,14 +85,14 @@ object ClaudeClient {
         Thread({
             var conn: HttpURLConnection? = null
             try {
-                val system = if (context.isNullOrBlank()) SYSTEM_HUD
-                else "$SYSTEM_HUD\n\nData yang boleh dipakai untuk menjawab:\n$context"
+                val sys = if (context.isNullOrBlank()) system
+                else "$system\n\nData milik pengguna yang boleh dipakai:\n$context"
 
                 val body = JSONObject()
                     .put("model", model)
-                    .put("max_tokens", 300)
+                    .put("max_tokens", maxTokens)
                     .put("stream", true)
-                    .put("system", system)
+                    .put("system", sys)
                     .put("messages", JSONArray().put(
                         JSONObject().put("role", "user").put("content", question)))
                     .toString()

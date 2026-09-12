@@ -32,6 +32,7 @@ object Proto {
     const val T_PREVIEW: Byte = 13    // HP -> kacamata : gambar pratinjau selama file belum lengkap
     const val T_ASK: Byte = 14        // kacamata -> HP : mulai/berhenti mendengarkan
     const val T_TEXT: Byte = 15       // HP -> kacamata : teks untuk HUD (status/ucapan/jawaban)
+    const val T_CFG: Byte = 16        // HP -> kacamata : ukuran teks & mode warna
 
     const val NAV_FORWARD = 1       // gulir ke bawah (lanjut ke halaman berikut bila di dasar)
     const val NAV_BACK = 2          // gulir ke atas (mundur ke halaman sebelumnya bila di puncak)
@@ -41,6 +42,8 @@ object Proto {
     const val ASK_START = 1
     const val ASK_STOP = 2
     const val ASK_CANCEL = 3
+    const val ASK_LISTEN = 4      // mode dengar lawan bicara (hidup/mati)
+    const val ASK_CLEAR = 5
 
     const val TEXT_STATUS = 0     // baris status kecil ("mendengarkan…")
     const val TEXT_HEARD = 1      // apa yang terdengar
@@ -63,6 +66,9 @@ data class WifiOffer(val docId: String, val token: String, val port: Int, val ip
  * [done] true = jawaban selesai.
  */
 data class AskText(val kind: Int, val text: String, val append: Boolean, val done: Boolean)
+
+/** Pengaturan tampilan HUD. [textSp] ukuran teks jawaban dalam sp. */
+data class HudCfg(val textSp: Int, val invert: Boolean)
 
 /** Gambar pratinjau: [data] = hasil [PreviewCodec.encode]. */
 class Preview(val docId: String, val page: Int, val pageCount: Int, val w: Int, val h: Int, val data: ByteArray)
@@ -146,6 +152,9 @@ object Codec {
         val kind = readInt(); val append = readBoolean(); val done = readBoolean()
         AskText(kind, readUTF(), append, done)
     }
+
+    fun cfg(c: HudCfg) = Frame(Proto.T_CFG, build { writeInt(c.textSp); writeBoolean(c.invert) })
+    fun readCfg(f: Frame): HudCfg = input(f).run { HudCfg(readInt(), readBoolean()) }
 
     fun error(msg: String) = Frame(Proto.T_ERROR, build { writeUTF(msg.take(500)) })
     fun readError(f: Frame): String = input(f).readUTF()

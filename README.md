@@ -77,12 +77,30 @@ Key disimpan di penyimpanan privat aplikasi di HP — tidak pernah masuk ke kode
 Kolom **Catatan/data** di Pengaturan diisi hal yang boleh dipakai Claude untuk menjawab
 (mis. daftar harga, spesifikasi). Isinya ikut terkirim ke API setiap pertanyaan.
 
-**Kontrol touchpad saat panel tanya terbuka:**
+### Dua mode (versi 0.4)
 
-| Gerakan | Aksi |
-|---|---|
-| Ketuk | Mulai bicara / berhenti bicara |
-| Tahan | Tutup panel tanya (kembali ke PDF) |
+- **Mode Tanya** — ketuk touchpad, Anda yang bicara, Claude menjawab.
+- **Mode Dengar** — tahan touchpad. Mikrofon terus menyala menangkap ucapan **lawan bicara**.
+  Setiap kalimatnya, HUD menampilkan dua baris:
+  `MAKSUD:` inti ucapannya, dan `TANGGAPI:` bantahan atau pertanyaan balik yang bisa Anda pakai.
+  Untuk hemat biaya, analisis hanya jalan bila ucapannya ≥ 4 kata dan ada jeda ≥ 4 detik dari analisis sebelumnya.
+
+**Kontrol touchpad:**
+
+| Gerakan | Panel tanya tertutup | Panel tanya terbuka |
+|---|---|---|
+| Ketuk | Mulai/berhenti bicara (Mode Tanya) | Mulai/berhenti bicara |
+| Tahan | Hidup/matikan Mode Dengar | Hidup/matikan Mode Dengar |
+| Swipe maju | Gulir PDF | Gulir teks jawaban ke bawah |
+| Swipe mundur | Gulir PDF | Gulir ke atas; di puncak → tutup panel |
+
+**Ukuran teks**: atur di Pengaturan HP (geser slider 8–26 sp, default 13). Perubahannya langsung
+terlihat di kacamata. Makin kecil, makin banyak teks yang muat.
+**Panjang jawaban**: ringkas / sedang / detail — sesuaikan dengan ukuran teks yang dipilih.
+
+**Etika & hukum:** Mode Dengar merekam suara lawan bicara. Untuk urusan bisnis sendiri umumnya wajar,
+apalagi bila Anda memberi tahu. Untuk rapat internal bank atau pihak ketiga, rekaman menyangkut
+kerahasiaan dan UU PDP — pakai Mode Tanya saja.
 
 **Catatan kecepatan:** total jeda ±1,5–3 detik dari selesai bicara sampai kata pertama muncul.
 Pengenalan suara memakai mesin bawaan Android dan butuh internet di HP.

@@ -31,8 +31,28 @@ class AskSession(
     private var recognizer: SpeechRecognizer? = null
     private var call: ClaudeClient.Call? = null
     private var startedAt = 0L
+    private var lastAnalysisAt = 0L
+
+    /** Sedang merekam suara (baik mode tanya maupun mode dengar). */
     var isListening = false
         private set
+
+    /** Mode dengar: mikrofon terus menyala untuk menangkap ucapan lawan bicara. */
+    var mode = MODE_TANYA
+        private set
+
+    /** Hidupkan/matikan mode dengar lawan bicara. */
+    fun toggleListenMode() {
+        if (mode == MODE_DENGAR) {
+            mode = MODE_TANYA
+            cancelAll()
+            out.status("Mode dengar mati")
+        } else {
+            mode = MODE_DENGAR
+            out.status("Mode dengar aktif")
+            start()
+        }
+    }
 
     fun start() {
         if (isListening) return
@@ -58,13 +78,32 @@ class AskSession(
             override fun onResults(results: Bundle?) {
                 isListening = false
                 val teks = teksPertama(results)
-                if (teks.isNullOrBlank()) { out.error("Tidak ada suara yang terdengar"); return }
+                if (teks.isNullOrBlank()) {
+                    if (mode == MODE_DENGAR) lanjutMendengar() else out.error("Tidak ada suara yang terdengar")
+                    return
+                }
                 out.heard(teks, true)
-                tanyaClaude(teks)
+                if (mode == MODE_DENGAR) {
+                    // Jangan panggil API untuk gumaman pendek, dan beri jeda minimal antar panggilan.
+                    val cukupPanjang = teks.trim().split(" ").size >= 4
+                    val sudahLewatJeda = SystemClock.uptimeMillis() - lastAnalysisAt > JEDA_ANALISIS_MS
+                    if (cukupPanjang && sudahLewatJeda) {
+                        lastAnalysisAt = SystemClock.uptimeMillis()
+                        tanyaClaude(teks)
+                    }
+                    lanjutMendengar()
+                } else {
+                    tanyaClaude(teks)
+                }
             }
 
             override fun onError(error: Int) {
                 isListening = false
+                // Dalam mode dengar, sunyi/tidak terdengar itu wajar — langsung dengarkan lagi.
+                val wajar = error == SpeechRecognizer.ERROR_NO_MATCH ||
+                    error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                if (mode == MODE_DENGAR && wajar) { lanjutMendengar(); return }
+                if (mode == MODE_DENGAR) mode = MODE_TANYA
                 out.error(pesanGalatSuara(error))
             }
 
@@ -95,6 +134,7 @@ class AskSession(
 
     fun cancelAll() {
         isListening = false
+        handler.removeCallbacksAndMessages(null)
         try { recognizer?.cancel() } catch (_: Exception) {}
         cancelAnswer()
     }
@@ -110,13 +150,23 @@ class AskSession(
         call = null
     }
 
+    /** Mulai sesi dengar berikutnya (SpeechRecognizer berhenti sendiri tiap kali sunyi). */
+    private fun lanjutMendengar() {
+        if (mode != MODE_DENGAR) return
+        handler.postDelayed({ if (mode == MODE_DENGAR && !isListening) start() }, 250)
+    }
+
     private fun tanyaClaude(pertanyaan: String) {
-        out.status("Claude berpikir…")
+        startedAt = SystemClock.uptimeMillis()
+        out.status(if (mode == MODE_DENGAR) "Menganalisis…" else "Claude berpikir…")
         call = ClaudeClient.ask(
             apiKey = prefs.apiKey,
             model = prefs.model,
             question = pertanyaan,
             context = prefs.konteks.takeIf { it.isNotBlank() },
+            system = if (mode == MODE_DENGAR) ClaudeClient.systemDengar(prefs.panjang)
+            else ClaudeClient.systemTanya(prefs.panjang),
+            maxTokens = ClaudeClient.maxTokens(prefs.panjang),
             onDelta = { out.answerDelta(it) },
             onDone = { out.answerDone(SystemClock.uptimeMillis() - startedAt) },
             onError = { out.error(it) },
@@ -137,7 +187,14 @@ class AskSession(
         else -> "Galat pengenalan suara ($code)"
     }
 
-    companion object { private const val TAG = "AskSession" }
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    companion object {
+        private const val TAG = "AskSession"
+        const val MODE_TANYA = 0
+        const val MODE_DENGAR = 1
+        private const val JEDA_ANALISIS_MS = 4000L
+    }
 }
 
 /** Pengaturan tersimpan di penyimpanan privat aplikasi (tidak ikut ke GitHub). */
@@ -155,6 +212,20 @@ class Prefs(context: Context) {
     var bahasa: String
         get() = sp.getString("bahasa", "id-ID").orEmpty()
         set(v) { sp.edit().putString("bahasa", v).apply() }
+
+    /** Ukuran teks jawaban di HUD (sp). Kecil = lebih banyak teks muat. */
+    var textSp: Int
+        get() = sp.getInt("text_sp", 13)
+        set(v) { sp.edit().putInt("text_sp", v.coerceIn(8, 26)).apply() }
+
+    /** 0 = ringkas, 1 = sedang, 2 = detail. */
+    var panjang: Int
+        get() = sp.getInt("panjang", 1)
+        set(v) { sp.edit().putInt("panjang", v.coerceIn(0, 2)).apply() }
+
+    var invert: Boolean
+        get() = sp.getBoolean("invert", true)
+        set(v) { sp.edit().putBoolean("invert", v).apply() }
 
     /** Catatan/data pribadi yang ikut dikirim sebagai bahan jawaban (opsional). */
     var konteks: String

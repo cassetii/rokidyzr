@@ -14,8 +14,8 @@ android {
         // BLUETOOTH_CONNECT saat instal, jadi biasanya tanpa dialog di kacamata.
         // Bila firmware tetap menolak, aplikasi mengajukan izin runtime sendiri.
         targetSdk = 30
-        versionCode = 5
-        versionName = "0.3.1"
+        versionCode = 6
+        versionName = "0.3.2"
     }
 
     // Kunci tanda tangan TETAP (bukan acak per build) supaya versi baru bisa dipasang

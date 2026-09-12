@@ -16,16 +16,21 @@ import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.text.InputType
 import android.widget.Button
 import android.widget.EditText
+import android.widget.SeekBar
+import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import id.nala.rokidpdf.common.AskText
 import id.nala.rokidpdf.common.Hello
+import id.nala.rokidpdf.common.HudCfg
 import id.nala.rokidpdf.common.Preview
 import id.nala.rokidpdf.common.PreviewCodec
 import id.nala.rokidpdf.common.Proto
@@ -39,6 +44,10 @@ class MainActivity : Activity(), PhoneLink.Listener {
     private lateinit var canvasView: PdfCanvasView
     private lateinit var statusText: TextView
     private lateinit var pageText: TextView
+    private lateinit var askPanel: LinearLayout
+    private lateinit var askScroll: ScrollView
+    private lateinit var askHeardView: TextView
+    private lateinit var askAnswerView: TextView
 
     private var pfd: ParcelFileDescriptor? = null
     private var renderer: PdfRenderer? = null
@@ -91,6 +100,7 @@ class MainActivity : Activity(), PhoneLink.Listener {
             setPadding((8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), 0)
             addView(btn("Buka PDF") { pickPdf() })
             addView(btn("Tanya") { toggleAsk() })
+            addView(btn("Dengar") { toggleListen() })
             addView(btn("⚙") { showSettings() })
         }
         canvasView = PdfCanvasView(this).apply {
@@ -111,12 +121,36 @@ class MainActivity : Activity(), PhoneLink.Listener {
             addView(pageText, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             addView(btn("Hal ▶") { canvasView.nextPage() })
         }
+        // Panel jawaban: menutupi area PDF saat bertanya, ketuk untuk menutup.
+        askHeardView = TextView(this).apply {
+            setTextColor(Color.rgb(160, 165, 170)); textSize = 15f
+        }
+        askAnswerView = TextView(this).apply {
+            setTextColor(Color.WHITE); textSize = 20f
+            setPadding(0, (8 * dp).toInt(), 0, 0)
+            setTextIsSelectable(true)
+        }
+        askScroll = ScrollView(this).apply { addView(askAnswerView) }
+        askPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.rgb(18, 19, 22))
+            setPadding((16 * dp).toInt(), (12 * dp).toInt(), (16 * dp).toInt(), (12 * dp).toInt())
+            visibility = View.GONE
+            addView(askHeardView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            addView(askScroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+            setOnClickListener { visibility = View.GONE }
+        }
+        val center = FrameLayout(this).apply {
+            addView(canvasView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(askPanel, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(24, 25, 28))
             addView(top, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             addView(statusText, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-            addView(canvasView, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+            addView(center, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
             addView(bottom, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }
         setContentView(root)
@@ -246,16 +280,43 @@ class MainActivity : Activity(), PhoneLink.Listener {
         return a
     }
 
+    /** Kirim teks ke kacamata DAN tampilkan di layar HP (supaya bisa dipakai tanpa kacamata). */
     private fun hud(kind: Int, text: String, append: Boolean) {
         PhoneLink.sendText(AskText(kind, text, append, false))
-        if (kind != Proto.TEXT_ANSWER) statusText.text = text
+        askPanel.visibility = View.VISIBLE
+        when (kind) {
+            Proto.TEXT_HEARD -> {
+                askHeardView.text = "\u201c$text\u201d"
+                askAnswerView.text = ""
+                statusText.text = text
+            }
+            Proto.TEXT_ANSWER -> {
+                if (append) askAnswerView.append(text) else askAnswerView.text = text
+                askScroll.post { askScroll.fullScroll(View.FOCUS_DOWN) }
+            }
+            else -> statusText.text = text
+        }
     }
 
     private fun toggleAsk() {
         if (!hasMicPermission()) { requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC); return }
         val a = askSession()
-        if (a.isListening) a.stop() else a.start()
+        if (a.isListening) {
+            a.stop()
+        } else {
+            askPanel.visibility = View.VISIBLE
+            askHeardView.text = "Mendengarkan… ketuk \"Tanya\" lagi untuk berhenti"
+            askAnswerView.text = ""
+            a.start()
+        }
     }
+
+    private fun toggleListen() {
+        if (!hasMicPermission()) { requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC); return }
+        askSession().toggleListenMode()
+    }
+
+    private fun kirimCfg() = PhoneLink.sendCfg(HudCfg(prefs.textSp, prefs.invert))
 
     private fun hasMicPermission() =
         checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -282,16 +343,51 @@ class MainActivity : Activity(), PhoneLink.Listener {
                 text = labelModel()
             }
         }
+        val ukuranLabel = TextView(this).apply { text = "Ukuran teks di kacamata: ${prefs.textSp} sp" }
+        val ukuranBar = SeekBar(this).apply {
+            max = 18                       // 8..26 sp
+            progress = prefs.textSp - 8
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar?, value: Int, fromUser: Boolean) {
+                    prefs.textSp = value + 8
+                    ukuranLabel.text = "Ukuran teks di kacamata: ${prefs.textSp} sp"
+                    kirimCfg()             // langsung terlihat di kacamata
+                }
+                override fun onStartTrackingTouch(sb: SeekBar?) {}
+                override fun onStopTrackingTouch(sb: SeekBar?) {}
+            })
+        }
+        val panjangBtn = Button(this).apply {
+            isAllCaps = false
+            text = labelPanjang()
+            setOnClickListener {
+                prefs.panjang = (prefs.panjang + 1) % 3
+                text = labelPanjang()
+            }
+        }
+        val warnaBtn = Button(this).apply {
+            isAllCaps = false
+            text = labelWarna()
+            setOnClickListener {
+                prefs.invert = !prefs.invert
+                text = labelWarna()
+                kirimCfg()
+            }
+        }
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((20 * dp).toInt(), (16 * dp).toInt(), (20 * dp).toInt(), 0)
             addView(keyField)
             addView(modelBtn)
+            addView(panjangBtn)
+            addView(ukuranLabel)
+            addView(ukuranBar)
+            addView(warnaBtn)
             addView(konteksField)
         }
         AlertDialog.Builder(this)
             .setTitle("Pengaturan")
-            .setView(box)
+            .setView(android.widget.ScrollView(this).apply { addView(box) })
             .setPositiveButton("Simpan") { _, _ ->
                 prefs.apiKey = keyField.text.toString()
                 prefs.konteks = konteksField.text.toString()
@@ -300,6 +396,15 @@ class MainActivity : Activity(), PhoneLink.Listener {
             .setNegativeButton("Batal", null)
             .show()
     }
+
+    private fun labelPanjang() = "Panjang jawaban: " + when (prefs.panjang) {
+        0 -> "ringkas"
+        2 -> "detail"
+        else -> "sedang"
+    }
+
+    private fun labelWarna() =
+        if (prefs.invert) "Warna: terbalik (teks terang)" else "Warna: normal"
 
     private fun labelModel() =
         if (prefs.model == ClaudeClient.MODEL_CEPAT) "Model: cepat (Haiku 4.5)" else "Model: pintar (Sonnet 5)"
@@ -312,6 +417,7 @@ class MainActivity : Activity(), PhoneLink.Listener {
         if (hello.screenW > 0 && hello.screenH > 0) {
             canvasView.setBoxAspect(hello.screenH.toFloat() / hello.screenW)
         }
+        kirimCfg()
     }
 
     override fun onGlassesReady(docId: String, pageCount: Int) {
@@ -335,6 +441,8 @@ class MainActivity : Activity(), PhoneLink.Listener {
         when (action) {
             Proto.ASK_START -> toggleAsk()
             Proto.ASK_STOP -> ask?.stop()
+            Proto.ASK_LISTEN -> toggleListen()
+            Proto.ASK_CLEAR -> ask?.cancelAll()
             Proto.ASK_CANCEL -> ask?.cancelAll()
         }
     }

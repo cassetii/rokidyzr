@@ -20,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import id.nala.rokidpdf.common.AskText
+import id.nala.rokidpdf.common.HudCfg
 import id.nala.rokidpdf.common.Proto
 import id.nala.rokidpdf.common.ViewState
 import java.io.File
@@ -95,14 +96,18 @@ class MainActivity : Activity(), GlassesLink.Listener {
             setBackgroundColor(Color.BLACK); setPadding(12, 4, 12, 4)
             visibility = View.GONE
         }
-        askStatus = TextView(this).apply { setTextColor(Color.WHITE); textSize = 14f }
-        askHeard = TextView(this).apply { setTextColor(Color.WHITE); textSize = 16f }
-        askAnswer = TextView(this).apply { setTextColor(Color.WHITE); textSize = 22f }
+        // Ukuran awal kecil supaya banyak teks muat; bisa diatur dari HP (Pengaturan).
+        askStatus = TextView(this).apply { setTextColor(Color.WHITE); textSize = 10f }
+        askHeard = TextView(this).apply { setTextColor(Color.WHITE); textSize = 11f }
+        askAnswer = TextView(this).apply {
+            setTextColor(Color.WHITE); textSize = 13f
+            setLineSpacing(0f, 1.05f)
+        }
         askScroll = ScrollView(this).apply { addView(askAnswer) }
         askBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
-            setPadding(16, 16, 16, 16)
+            setPadding(8, 6, 8, 6)
             visibility = View.GONE
             addView(askStatus)
             addView(askHeard)
@@ -222,6 +227,16 @@ class MainActivity : Activity(), GlassesLink.Listener {
         }
     }
 
+    override fun onCfg(c: HudCfg) = applyCfg(c)
+
+    private fun applyCfg(c: HudCfg) {
+        val sp = c.textSp.coerceIn(8, 26).toFloat()
+        askAnswer.textSize = sp
+        askHeard.textSize = (sp - 2f).coerceAtLeast(8f)
+        askStatus.textSize = (sp - 3f).coerceAtLeast(7f)
+        if (c.invert != inverted) toggleInvert()
+    }
+
     /** Tampilkan/sembunyikan panel tanya-jawab di atas tampilan PDF. */
     private fun showAsk(show: Boolean) {
         askBox.visibility = if (show) View.VISIBLE else View.GONE
@@ -242,18 +257,30 @@ class MainActivity : Activity(), GlassesLink.Listener {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_PAGE_UP -> Proto.NAV_BACK
             else -> return super.onKeyDown(keyCode, event)
         }
+        // Saat panel tanya terbuka, swipe menggulir teks jawaban.
+        // Swipe mundur ketika sudah di puncak akan menutup panel.
+        if (askBox.visibility == View.VISIBLE) {
+            val step = (askScroll.height * 0.8f).toInt().coerceAtLeast(40)
+            if (action == Proto.NAV_FORWARD) {
+                askScroll.smoothScrollBy(0, step)
+            } else {
+                if (askScroll.scrollY <= 0) { GlassesLink.sendAsk(Proto.ASK_CANCEL); asking = false; showAsk(false) }
+                else askScroll.smoothScrollBy(0, -step)
+            }
+            return true
+        }
         if (!GlassesLink.sendNav(action)) showStatus("HP tidak terhubung")
         return true
     }
 
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent): Boolean {
         if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-            if (askBox.visibility == View.VISIBLE) {
-                GlassesLink.sendAsk(Proto.ASK_CANCEL)
-                asking = false
-                showAsk(false)
+            // Tahan = hidup/matikan Mode Dengar (menangkap ucapan lawan bicara).
+            if (GlassesLink.sendAsk(Proto.ASK_LISTEN)) {
+                showAsk(true)
+                askStatus.text = "Mode dengar…"
             } else {
-                toggleInvert()
+                showStatus("HP tidak terhubung")
             }
             return true
         }
