@@ -1,0 +1,49 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cari folder proyek
+        run: |
+          echo "Isi repository:"; find . -not -path "./.git*" | head -60
+          F=$(find . -name settings.gradle.kts -not -path "./.git/*" | head -1)
+          if [ -z "$F" ]; then
+            echo "::error::settings.gradle.kts tidak ditemukan. Upload ulang isi folder RokidPdfMirror."
+            exit 1
+          fi
+          echo "PROJ=$(dirname "$F")" >> $GITHUB_ENV
+          echo "Proyek ditemukan di: $(dirname "$F")"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build kedua APK
+        working-directory: ${{ env.PROJ }}
+        run: gradle --no-daemon :phone:assembleDebug :glasses:assembleDebug
+
+      - name: Kumpulkan hasil
+        run: |
+          mkdir -p hasil
+          cp "$PROJ/phone/build/outputs/apk/debug/phone-debug.apk"     hasil/1-PASANG-DI-HP.apk
+          cp "$PROJ/glasses/build/outputs/apk/debug/glasses-debug.apk" hasil/2-PASANG-DI-KACAMATA.apk
+          cp "$PROJ/tools/pasang-ke-kacamata.bat" hasil/ || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: APK-PDF-ke-Rokid
+          path: hasil/
