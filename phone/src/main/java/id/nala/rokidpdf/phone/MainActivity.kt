@@ -27,9 +27,8 @@ import android.widget.Toast
 import id.nala.rokidpdf.common.AskText
 import id.nala.rokidpdf.common.Hello
 import id.nala.rokidpdf.common.Preview
+import id.nala.rokidpdf.common.PreviewCodec
 import id.nala.rokidpdf.common.Proto
-import id.nala.rokidpdf.common.Preview
-import id.nala.rokidpdf.common.ProtoCodec
 import id.nala.rokidpdf.common.ViewState
 import java.io.File
 import java.security.MessageDigest
