@@ -250,7 +250,11 @@ class AskSession(
         val idx = notes ?: return false
         val hit = idx.cari(ucapanTeks, maxHasil = 2)
         if (hit.isEmpty()) return false
-        val teks = hit.joinToString("\n") { it.entry.ringkas() }
+        // Bentuk tampilan: judul sebagai kepala, lalu kalimat yang relevan sebagai butir.
+        val teks = hit.joinToString("\n") { h ->
+            val butir = h.cuplikan.lines().filter { it.isNotBlank() }.joinToString("\n") { "  - $it" }
+            if (butir.isBlank()) h.entry.title else "${h.entry.title}\n$butir"
+        }
         if (teks != lastNote) {
             lastNote = teks
             out.note(teks)

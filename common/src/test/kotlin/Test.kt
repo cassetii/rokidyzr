@@ -163,12 +163,13 @@ fun main() {
     check(idx.cari("garansinya berapa lama")[0].entry.title.contains("Garansi"), "cocok ke Garansi")
     check(idx.cari("besok kita makan siang di mana").isEmpty(), "obrolan biasa tidak memicu apa-apa")
     check(idx.cari("ya").isEmpty(), "kata pendek tidak memicu")
-    check(h1[0].entry.ringkas(80).length <= 80, "ringkasan dipotong sesuai lebar HUD")
+    check(h1[0].cuplikan.contains("600.000"), "cuplikan memuat angka yang relevan: ${h1[0].cuplikan}")
 
     // format daftar sederhana tanpa heading
     val daftar = NoteIndex.fromMarkdown("Pasang 1 PK: Rp 450.000\nPasang 2 PK: Rp 600.000\nCuci AC: Rp 85.000")
     check(daftar.entries.size == 3, "daftar tanpa heading jadi ${daftar.entries.size} entri")
     check(daftar.cari("berapa cuci ac")[0].entry.body.contains("85.000"), "daftar sederhana ikut cocok")
+    check(idx.cari("bongkar pasangnya berapa")[0].cuplikan.contains("350.000"), "cuplikan menunjuk kalimat yang tepat")
 
     // bedakan 1 PK vs 2 PK
     val hargaIdx = NoteIndex.fromMarkdown(
@@ -186,6 +187,28 @@ fun main() {
     val perCari = (System.nanoTime() - t1) / 20 / 1_000_000.0
     check(idxBesar.cari("pelanggan 317 pakai tipe apa")[0].entry.title.contains("317"), "temukan pelanggan 317 dari 600 entri")
     check(perCari < 30.0, "600 entri dicari dalam ${"%.1f".format(perCari)} ms (target < 30 ms)")
+
+    // --- Uji dengan catatan asli hasil ekstrak PDF (88 halaman deck)
+    val nyata = java.io.File("/tmp/real.md")
+    if (nyata.exists()) {
+        val idxNyata = NoteIndex.fromMarkdown(nyata.readText())
+        println("\n--- catatan asli: ${idxNyata.entries.size} entri ---")
+        val judulHalaman = idxNyata.entries.count { Regex("^Halaman \\d+$").matches(it.title) }
+        check(judulHalaman == 0, "tidak ada lagi judul 'Halaman N' (sisa: $judulHalaman)")
+        for (q in listOf(
+            "apa latar belakang change management blueprint ini",
+            "bagaimana tahapan metodologi yang dipakai",
+            "apa risiko kalau tidak segera bertindak",
+        )) {
+            val h = idxNyata.cari(q)
+            println("\nUcapan: \"$q\"")
+            h.forEach { println("  ${it.entry.title}\n  ${it.cuplikan.replace("\n", "\n  ")}") }
+            check(h.isNotEmpty(), "dapat hasil untuk: $q")
+            check(h.all { !it.cuplikan.contains("Veda Praxis for Bank Sulselbar") }, "boilerplate vendor tidak muncul di cuplikan")
+            check(h.all { it.cuplikan.length <= 320 }, "cuplikan ringkas (<=320 char)")
+        }
+        check(idxNyata.cari("nanti sore kita ketemu di kafe").isEmpty(), "obrolan biasa tidak memicu")
+    }
 
     phone.close(); glasses.close()
     println("\nSEMUA TES LULUS")

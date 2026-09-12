@@ -335,6 +335,7 @@ class MainActivity : Activity(), PhoneLink.Listener {
     }
 
     private fun loadNotes(uri: Uri) {
+        statusText.text = "Memuat catatan…"
         Thread {
             try {
                 val teks = contentResolver.openInputStream(uri)!!.bufferedReader().use { it.readText() }

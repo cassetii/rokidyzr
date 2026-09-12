@@ -9,7 +9,11 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.os.Build
 import android.os.Bundle
+import android.graphics.Typeface
 import android.os.SystemClock
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.StyleSpan
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -228,7 +232,7 @@ class MainActivity : Activity(), GlassesLink.Listener {
             Proto.TEXT_STATUS -> askStatus.text = t.text
             Proto.TEXT_HEARD -> askHeard.text = "\u201c${t.text}\u201d"
             Proto.TEXT_NOTE -> {
-                askNote.text = "\u25B8 ${t.text}"
+                askNote.text = formatCatatan(t.text)
                 askNote.visibility = View.VISIBLE
             }
             Proto.TEXT_ANSWER -> {
@@ -237,6 +241,20 @@ class MainActivity : Activity(), GlassesLink.Listener {
                 if (t.done) { asking = false; askStatus.text = "Ketuk untuk tanya lagi · tahan untuk tutup" }
             }
         }
+    }
+
+    /** Baris judul ditebalkan, butir isi dibiarkan biasa — enak dipindai di layar kecil. */
+    private fun formatCatatan(teks: String): CharSequence {
+        val sb = SpannableStringBuilder()
+        for (baris in teks.lines()) {
+            if (baris.isBlank()) continue
+            val butir = baris.startsWith("  - ")
+            val mulai = sb.length
+            sb.append(if (butir) "  \u00b7 " + baris.removePrefix("  - ") else "\u25B8 " + baris)
+            if (!butir) sb.setSpan(StyleSpan(Typeface.BOLD), mulai, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            sb.append('\n')
+        }
+        return sb
     }
 
     override fun onCfg(c: HudCfg) = applyCfg(c)

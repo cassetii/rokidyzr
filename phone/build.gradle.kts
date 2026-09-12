@@ -11,7 +11,7 @@ android {
         applicationId = "id.nala.rokidpdf.phone"
         minSdk = 28
         targetSdk = 34
-        versionCode = 8
+        versionCode = 9
         versionName = "0.3.2"
     }
 

@@ -129,6 +129,19 @@ Aplikasi mengumpulkan potongan-potongan itu dan baru menganggap ucapan selesai s
 sunyi selama jeda yang diatur, jadi HUD tidak menyela di tengah kalimat orang. Atur 0–10 detik
 di Pengaturan (0 = tampil seketika, tanpa menunggu).
 
+**Catatan hasil ekstrak PDF juga didukung (versi 0.7).** Deck yang diekstrak biasanya berjudul
+"Halaman 12" dan penuh kop berulang. Aplikasi menanganinya otomatis:
+
+- judul "Halaman N" diganti kalimat pertama yang bermakna;
+- frasa yang berulang di banyak halaman (nama vendor, judul deck) dideteksi sendiri lalu dibuang,
+  baik dari tampilan maupun dari indeks pencarian, supaya tidak memicu cocokan palsu;
+- halaman yang isinya hanya pembatas/daftar isi dibuang seluruhnya;
+- sisa penomoran slide ("… Project 1 2 A.") dipangkas.
+
+Yang tampil di HUD bukan potongan awal halaman, melainkan **kalimat yang paling relevan dengan ucapan**,
+dengan judul ditebalkan dan isi sebagai butir. Diuji dengan deck 88 halaman: 89 entri → 78 entri berguna,
+parsing ±0,3 detik, pencarian ±3 milidetik.
+
 Pencocokan mengerti imbuhan ("garansinya" → "garansi") dan membedakan angka ("1 PK" vs "2 PK").
 Obrolan biasa tidak memicu apa-apa karena ada ambang skor.
 
