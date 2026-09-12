@@ -1,11 +1,11 @@
-# PDF ke Rokid — tampilkan PDF dari HP di Rokid Glasses secara realtime
+# Nala HUD — asisten kacamata Rokid: PDF, catatan pribadi, dan tanya-jawab suara
 
 Dua aplikasi Android dalam satu proyek:
 
 | Modul | Dipasang di | Nama aplikasi | Fungsi |
 |---|---|---|---|
-| `phone` | HP Android | **PDF ke Rokid** | Pilih PDF, zoom/geser, kirim posisi pandang |
-| `glasses` | Rokid Glasses (YodaOS-Sprite) | **PDF HUD** | Terima PDF, render area yang sama, tampil di HUD |
+| `phone` | HP Android | **Nala HUD** | Otak: PDF, catatan, suara, Claude API |
+| `glasses` | Rokid Glasses (YodaOS-Sprite) | **Nala HUD** | Layar & tombol: tampilkan di HUD |
 | `common` | (dipakai keduanya) | – | Protokol, koneksi, logika zoom |
 
 ## Cara kerja
@@ -39,7 +39,7 @@ Cara SPP ini juga dipakai proyek komunitas seperti GlassTube dan rokid-Strava.
 
 ## Build & pasang
 
-1. Buka folder `RokidPdfMirror` di Android Studio, lalu tunggu Gradle sync selesai (butuh internet pertama kali).
+1. Buka folder `NalaHUD` di Android Studio, lalu tunggu Gradle sync selesai (butuh internet pertama kali).
 2. **Pasang ke HP:** colok HP, pilih konfigurasi run **phone**, lalu tekan Run ▶.
 3. **Pasang ke kacamata (tanpa kabel):** simpan `2-PASANG-DI-KACAMATA.apk` di HP, lalu di aplikasi
    **Hi Rokid** buka **Kotak alat → Manajemen aplikasi kacamata → Instal aplikasi baru** dan pilih file tersebut.
@@ -48,8 +48,8 @@ Cara SPP ini juga dipakai proyek komunitas seperti GlassTube dan rokid-Strava.
 
 ## Cara pakai
 
-1. Buka **PDF ke Rokid** di HP dan izinkan Bluetooth. Status akan menampilkan "Menunggu kacamata tersambung…".
-2. Buka **PDF HUD** di kacamata. Aplikasi otomatis mencari HP dan menyambung.
+1. Buka **Nala HUD** (HP) di HP dan izinkan Bluetooth. Status akan menampilkan "Menunggu kacamata tersambung…".
+2. Buka **Nala HUD** (kacamata) di kacamata. Aplikasi otomatis mencari HP dan menyambung.
 3. Di HP, ketuk **Buka PDF**. File dikirim ke kacamata (ada persentase progres), lalu tampil.
 4. Pinch untuk zoom dan geser satu jari untuk memindahkan area. Kacamata mengikuti secara realtime.
    Ketuk dua kali untuk zoom cepat atau kembali ke lebar penuh.
@@ -85,14 +85,45 @@ Kolom **Catatan/data** di Pengaturan diisi hal yang boleh dipakai Claude untuk m
   `MAKSUD:` inti ucapannya, dan `TANGGAPI:` bantahan atau pertanyaan balik yang bisa Anda pakai.
   Untuk hemat biaya, analisis hanya jalan bila ucapannya ≥ 4 kata dan ada jeda ≥ 4 detik dari analisis sebelumnya.
 
-**Kontrol touchpad:**
+**Kontrol touchpad & tombol (versi 0.8):**
 
 | Gerakan | Panel tanya tertutup | Panel tanya terbuka |
 |---|---|---|
-| Ketuk | Mulai/berhenti bicara (Mode Tanya) | Mulai/berhenti bicara |
-| Tahan | Hidup/matikan Mode Dengar | Hidup/matikan Mode Dengar |
-| Swipe maju | Gulir PDF | Gulir teks jawaban ke bawah |
+| Ketuk 1x tombol tengah | Mulai/berhenti bicara (Mode Tanya) | Mulai/berhenti bicara |
+| Ketuk 2x tombol tengah | Hidup/matikan Mode Dengar | Hidup/matikan Mode Dengar |
+| Tahan tombol tengah | Hidup/matikan Mode Dengar | Hidup/matikan Mode Dengar |
+| Swipe maju | Gulir PDF | Gulir jawaban ke bawah |
 | Swipe mundur | Gulir PDF | Gulir ke atas; di puncak → tutup panel |
+| Volume + / − | Teks HUD lebih besar / lebih kecil | sama |
+
+Catatan teknis pemetaan tombol (dipelajari dari proyek komunitas `Inplov/rokid-browser`):
+
+- Tombol tengah bisa datang sebagai `DPAD_CENTER`, `ENTER`, `SPACE`, atau `MEDIA_PLAY_PAUSE`
+  tergantung firmware — keempatnya kini diterima.
+- Satu gerakan swipe sering terbaca berkali-kali, jadi ada penahan **700 ms**.
+- Ketukan tunggal ditunda **300 ms** untuk membedakannya dari ketukan ganda.
+- Tombol volume ditangkap di `dispatchKeyEvent` (bukan `onKeyDown`), karena sistem
+  memprosesnya lebih dulu. Perubahan ukuran lewat volume berlaku sampai HP mengirim
+  pengaturan baru.
+
+### Tampilan mengikuti design system resmi Rokid (versi 0.9)
+
+Diambil dari spesifikasi resmi `yodaos-project/AIUI` → `design/monochrome/design-system-green.md`
+("Monochrome-Green", kanvas acuan **480x352**):
+
+| Aturan | Nilai yang dipakai |
+|---|---|
+| Warna dasar | `#40ff5e` — satu kanal hijau, hierarki lewat tingkat cahaya |
+| Teks utama | opasitas 72% |
+| Teks sekunder | opasitas 48%, minimal 12sp |
+| Nilai penting (judul catatan) | opasitas 100% |
+| Skala huruf | display 22 · body 14 · body-sm 12 · label 11 · caption 10 |
+| Tinggi baris | body 1.45 · body-sm 1.4 |
+| Safe inset | 16px horizontal, 12px vertikal |
+| Jarak | 2 / 4 / 8 / 12 / 16 / 24 / 32 |
+
+Aturan penting lain yang diikuti: hitam berarti transparan (bukan panel gelap), jadi
+massa visual dijaga seminimal mungkin; makna penting tidak pernah ditaruh di opasitas 24% ke bawah.
 
 **Ukuran teks**: atur di Pengaturan HP (geser slider 8–26 sp, default 13). Perubahannya langsung
 terlihat di kacamata. Makin kecil, makin banyak teks yang muat.

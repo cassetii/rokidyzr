@@ -221,7 +221,7 @@ class MainActivity : Activity(), PhoneLink.Listener {
             canvasView.setDocument(r)
             updatePageText()
             PhoneLink.setDocument(d)
-            if (!PhoneLink.isConnected) onStatus("PDF siap. Buka aplikasi PDF HUD di kacamata.")
+            if (!PhoneLink.isConnected) onStatus("PDF siap. Buka Nala HUD di kacamata.")
         } catch (e: Exception) {
             Toast.makeText(this, "PDF tidak bisa dibaca (terkunci/rusak?): ${e.message}", Toast.LENGTH_LONG).show()
         }

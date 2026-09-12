@@ -19,7 +19,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="PDF ke Rokid"
+        android:label="Nala HUD"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
             android:name=".MainActivity"

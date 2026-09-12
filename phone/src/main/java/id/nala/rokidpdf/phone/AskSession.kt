@@ -326,9 +326,9 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("selalu_analisis", false)
         set(v) { sp.edit().putBoolean("selalu_analisis", v).apply() }
 
-    /** Ukuran teks jawaban di HUD (sp). Kecil = lebih banyak teks muat. */
+    /** Ukuran teks jawaban di HUD (sp). Default 14 = skala "body" design system Rokid. */
     var textSp: Int
-        get() = sp.getInt("text_sp", 13)
+        get() = sp.getInt("text_sp", 14)
         set(v) { sp.edit().putInt("text_sp", v.coerceIn(8, 26)).apply() }
 
     /** 0 = ringkas, 1 = sedang, 2 = detail. */

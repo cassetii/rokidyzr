@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "RokidPdfMirror"
+rootProject.name = "NalaHUD"
 include(":phone", ":glasses")

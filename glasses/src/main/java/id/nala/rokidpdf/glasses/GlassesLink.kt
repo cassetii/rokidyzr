@@ -136,7 +136,7 @@ object GlassesLink {
                     }
                 }
                 if (socket == null || device == null) {
-                    status("HP belum siap.\nBuka aplikasi \"PDF ke Rokid\" di HP.")
+                    status("HP belum siap.\nBuka aplikasi \"Nala HUD\" di HP.")
                     Thread.sleep(3000); continue
                 }
                 prefs.edit().putString(KEY_LAST, device.address).apply()

@@ -13,6 +13,7 @@ import android.graphics.Typeface
 import android.os.SystemClock
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.view.Gravity
 import android.view.KeyEvent
@@ -42,6 +43,22 @@ import java.io.File
  *  - geser mundur/atas : gulir ke atas
  *  - ketuk             : ganti mode warna (terbalik / normal)
  */
+/**
+ * Token dari design system resmi Rokid untuk layar hijau monokrom
+ * (AIUI "Monochrome-Green", kanvas acuan 480x352).
+ *
+ * Hierarki dibentuk lewat tingkat cahaya (opasitas), bukan warna — layarnya
+ * hanya punya satu kanal hijau. Hitam = transparan, bukan panel gelap.
+ */
+private object Hijau {
+    const val BASE = 0x40FF5E                    // #40ff5e
+    private fun tier(alpha: Int) = (alpha shl 24) or BASE
+    val INK = tier(0xFF)                          // nilai/penekanan tertinggi
+    val INK_PRIMARY = tier(0xB8)                  // 72% — teks utama
+    val INK_SECONDARY = tier(0x7A)                // 48% — teks sekunder (min. 12sp)
+    val LINE_MUTED = tier(0x3D)                   // 24% — pembatas, jangan untuk makna penting
+}
+
 class MainActivity : Activity(), GlassesLink.Listener {
 
     private lateinit var image: ImageView
@@ -57,6 +74,13 @@ class MainActivity : Activity(), GlassesLink.Listener {
     private lateinit var renderer: PdfHudRenderer
 
     private var asking = false
+
+    // Touchpad Rokid sering mengirim kode ganda untuk satu gerakan -> perlu penahan.
+    private var lastSwipeAt = 0L
+    private var lastCenterUpAt = 0L
+    private var centerTapPending: Runnable? = null
+    /** Ukuran teks hasil penyetelan tombol volume; 0 = ikut pengaturan HP. */
+    private var sizeOverride = 0f
 
     private var hasFrame = false
     @Volatile private var sharpDocId: String? = null   // dokumen yang sudah dirender tajam
@@ -87,38 +111,44 @@ class MainActivity : Activity(), GlassesLink.Listener {
             colorFilter = invertFilter
         }
         statusText = TextView(this).apply {
-            setTextColor(Color.WHITE); textSize = 22f; gravity = Gravity.CENTER
+            setTextColor(Hijau.INK_PRIMARY); textSize = 22f; gravity = Gravity.CENTER   // display
             setPadding(24, 24, 24, 24)
-            text = "PDF HUD\nMenyiapkan…"
+            text = "Nala HUD\nMenyiapkan…"
         }
         infoText = TextView(this).apply {
-            setTextColor(Color.WHITE); textSize = 13f
-            setBackgroundColor(Color.BLACK); setPadding(10, 4, 10, 4)
+            setTextColor(Hijau.INK_SECONDARY); textSize = 10f; letterSpacing = 0.05f
+            setBackgroundColor(Color.BLACK); setPadding(dp(8), dp(2), dp(8), dp(2))
             visibility = View.GONE
         }
         pageText = TextView(this).apply {
-            setTextColor(Color.WHITE); textSize = 16f
-            setBackgroundColor(Color.BLACK); setPadding(12, 4, 12, 4)
+            setTextColor(Hijau.INK); textSize = 11f; letterSpacing = 0.08f              // label
+            setBackgroundColor(Color.BLACK); setPadding(dp(8), dp(2), dp(8), dp(2))
             visibility = View.GONE
         }
-        // Ukuran awal kecil supaya banyak teks muat; bisa diatur dari HP (Pengaturan).
-        askStatus = TextView(this).apply { setTextColor(Color.WHITE); textSize = 10f }
-        askHeard = TextView(this).apply { setTextColor(Color.WHITE); textSize = 11f }
+        // Ukuran & warna mengikuti skala resmi: caption 10, body-sm 12, body 14.
+        askStatus = TextView(this).apply {
+            setTextColor(Hijau.INK_SECONDARY); textSize = 10f; letterSpacing = 0.05f
+        }
+        askHeard = TextView(this).apply {
+            setTextColor(Hijau.INK_SECONDARY); textSize = 12f
+            setLineSpacing(0f, 1.4f)
+        }
         askAnswer = TextView(this).apply {
-            setTextColor(Color.WHITE); textSize = 13f
-            setLineSpacing(0f, 1.05f)
+            setTextColor(Hijau.INK_PRIMARY); textSize = 14f
+            setLineSpacing(0f, 1.45f)                 // lineHeight body = 1.45
         }
         // Baris catatan pribadi: muncul seketika saat ucapan cocok dengan catatan Anda.
         askNote = TextView(this).apply {
-            setTextColor(Color.WHITE); textSize = 12f
-            setPadding(0, 2, 0, 4)
+            setTextColor(Hijau.INK_PRIMARY); textSize = 14f
+            setLineSpacing(0f, 1.4f)
+            setPadding(0, dp(4), 0, dp(8))            // spacing xs / sm
             visibility = View.GONE
         }
         askScroll = ScrollView(this).apply { addView(askAnswer) }
         askBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
-            setPadding(8, 6, 8, 6)
+            setPadding(dp(16), dp(12), dp(16), dp(12))   // safeInsetX 16 / safeInsetY 12
             visibility = View.GONE
             addView(askStatus)
             addView(askHeard)
@@ -251,7 +281,10 @@ class MainActivity : Activity(), GlassesLink.Listener {
             val butir = baris.startsWith("  - ")
             val mulai = sb.length
             sb.append(if (butir) "  \u00b7 " + baris.removePrefix("  - ") else "\u25B8 " + baris)
-            if (!butir) sb.setSpan(StyleSpan(Typeface.BOLD), mulai, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (!butir) {
+                sb.setSpan(StyleSpan(Typeface.BOLD), mulai, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                sb.setSpan(ForegroundColorSpan(Hijau.INK), mulai, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
             sb.append('\n')
         }
         return sb
@@ -260,11 +293,8 @@ class MainActivity : Activity(), GlassesLink.Listener {
     override fun onCfg(c: HudCfg) = applyCfg(c)
 
     private fun applyCfg(c: HudCfg) {
-        val sp = c.textSp.coerceIn(8, 26).toFloat()
-        askAnswer.textSize = sp
-        askNote.textSize = (sp - 1f).coerceAtLeast(8f)
-        askHeard.textSize = (sp - 2f).coerceAtLeast(8f)
-        askStatus.textSize = (sp - 3f).coerceAtLeast(7f)
+        sizeOverride = 0f                      // pengaturan dari HP menang atas penyetelan tombol volume
+        terapkanUkuran(c.textSp.coerceIn(8, 26).toFloat())
         if (c.invert != inverted) toggleInvert()
     }
 
@@ -276,10 +306,54 @@ class MainActivity : Activity(), GlassesLink.Listener {
 
     // ---------- Touchpad ----------
 
+    /**
+     * Tombol volume dibajak jadi pengatur ukuran teks HUD (naik/turun 1 sp).
+     * Harus di dispatchKeyEvent, karena volume ditangani sistem sebelum onKeyDown.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_VOLUME_UP -> { ubahUkuran(+1f); return true }
+                KeyEvent.KEYCODE_VOLUME_DOWN -> { ubahUkuran(-1f); return true }
+            }
+        } else if (event.action == KeyEvent.ACTION_UP &&
+            (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP || event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)
+        ) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun ubahUkuran(delta: Float) {
+        val sekarang = if (sizeOverride > 0f) sizeOverride else askAnswer.textSize / resources.displayMetrics.scaledDensity
+        sizeOverride = (sekarang + delta).coerceIn(8f, 26f)
+        terapkanUkuran(sizeOverride)
+        askStatus.text = "Ukuran teks ${sizeOverride.toInt()}"
+        showAsk(true)
+    }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    /**
+     * Skala tipografi resmi: body (sp) → body-sm (sp-2) → caption (sp-4).
+     * Teks sekunder dijaga minimal 12sp sesuai aturan keterbacaan.
+     */
+    private fun terapkanUkuran(sp: Float) {
+        askAnswer.textSize = sp
+        askNote.textSize = sp
+        askHeard.textSize = (sp - 2f).coerceAtLeast(12f)
+        askStatus.textSize = (sp - 4f).coerceAtLeast(10f)
+    }
+
+    private fun pusat(keyCode: Int): Boolean = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+        keyCode == KeyEvent.KEYCODE_ENTER ||
+        keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
+        keyCode == KeyEvent.KEYCODE_SPACE ||
+        keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+        keyCode == KeyEvent.KEYCODE_BUTTON_A
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        // Ketuk tengah  : mulai/berhenti bicara (tanya Claude)
-        // Tahan tengah  : tutup panel tanya, atau ganti mode warna saat panel tertutup
-        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+        if (pusat(keyCode)) {
             if (event.repeatCount == 0) event.startTracking()
             return true
         }
@@ -288,8 +362,11 @@ class MainActivity : Activity(), GlassesLink.Listener {
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_PAGE_UP -> Proto.NAV_BACK
             else -> return super.onKeyDown(keyCode, event)
         }
-        // Saat panel tanya terbuka, swipe menggulir teks jawaban.
-        // Swipe mundur ketika sudah di puncak akan menutup panel.
+        // Satu gerakan jari kadang terbaca beberapa kali -> abaikan yang terlalu rapat.
+        val now = SystemClock.uptimeMillis()
+        if (now - lastSwipeAt < SWIPE_DEBOUNCE_MS) return true
+        lastSwipeAt = now
+
         if (askBox.visibility == View.VISIBLE) {
             val step = (askScroll.height * 0.8f).toInt().coerceAtLeast(40)
             if (action == Proto.NAV_FORWARD) {
@@ -304,30 +381,33 @@ class MainActivity : Activity(), GlassesLink.Listener {
         return true
     }
 
+    /** Tahan tombol tengah: hidup/matikan Mode Dengar. */
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-            // Tahan = hidup/matikan Mode Dengar (menangkap ucapan lawan bicara).
-            if (GlassesLink.sendAsk(Proto.ASK_LISTEN)) {
-                showAsk(true)
-                askStatus.text = "Mode dengar…"
-            } else {
-                showStatus("HP tidak terhubung")
-            }
-            return true
-        }
+        if (pusat(keyCode)) { toggleDengar(); return true }
         return super.onKeyLongPress(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) &&
-            !event.isCanceled && event.eventTime - event.downTime < 600
-        ) {
-            askPressed()
-            return true
+        if (!pusat(keyCode)) return super.onKeyUp(keyCode, event)
+        if (event.isCanceled) return true              // sudah ditangani sebagai tahan-lama
+
+        val now = SystemClock.uptimeMillis()
+        if (now - lastCenterUpAt < DOUBLE_TAP_MS) {
+            // Ketukan kedua: batalkan ketukan tunggal yang tertunda.
+            centerTapPending?.let { askBox.removeCallbacks(it) }
+            centerTapPending = null
+            lastCenterUpAt = 0L
+            toggleDengar()
+        } else {
+            lastCenterUpAt = now
+            val r = Runnable { centerTapPending = null; askPressed() }
+            centerTapPending = r
+            askBox.postDelayed(r, DOUBLE_TAP_MS)       // tunggu dulu, siapa tahu ada ketukan kedua
         }
-        return super.onKeyUp(keyCode, event)
+        return true
     }
 
+    /** Ketuk sekali: mulai/berhenti bicara (Mode Tanya). */
     private fun askPressed() {
         if (!GlassesLink.sendAsk(if (asking) Proto.ASK_STOP else Proto.ASK_START)) {
             showStatus("HP tidak terhubung")
@@ -341,6 +421,13 @@ class MainActivity : Activity(), GlassesLink.Listener {
             askAnswer.text = ""
             askNote.visibility = View.GONE
         }
+    }
+
+    /** Ketuk dua kali atau tahan: Mode Dengar (menangkap ucapan lawan bicara). */
+    private fun toggleDengar() {
+        if (!GlassesLink.sendAsk(Proto.ASK_LISTEN)) { showStatus("HP tidak terhubung"); return }
+        showAsk(true)
+        askStatus.text = "Mode dengar…"
     }
 
     private fun toggleInvert() {

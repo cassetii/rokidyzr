@@ -15,7 +15,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="PDF HUD"
+        android:label="Nala HUD"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
         <activity
             android:name=".MainActivity"

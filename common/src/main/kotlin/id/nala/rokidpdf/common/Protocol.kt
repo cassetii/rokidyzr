@@ -14,6 +14,8 @@ import java.util.UUID
  */
 object Proto {
     val SPP_UUID: UUID = UUID.fromString("5c2d8f3a-6b1e-4a7c-9e0d-3f1b2a4c6d8e")
+    // Nama layanan Bluetooth. JANGAN diubah: harus sama persis di HP dan kacamata,
+    // termasuk saat salah satunya masih memakai versi lama.
     const val SERVICE_NAME = "RokidPdfMirror"
     const val VERSION = 1
 
