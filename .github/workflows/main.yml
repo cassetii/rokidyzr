@@ -12,10 +12,9 @@ jobs:
 
       - name: Cari folder proyek
         run: |
-          echo "Isi repository:"; find . -not -path "./.git*" | head -60
           F=$(find . -name settings.gradle.kts -not -path "./.git/*" | head -1)
           if [ -z "$F" ]; then
-            echo "::error::settings.gradle.kts tidak ditemukan. Upload ulang isi folder RokidPdfMirror."
+            echo "::error::settings.gradle.kts tidak ditemukan."
             exit 1
           fi
           echo "PROJ=$(dirname "$F")" >> $GITHUB_ENV
@@ -26,7 +25,14 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
+      # Tanpa android-actions/setup-android: runner sudah punya Android SDK,
+      # dan action itu gagal karena mencoba memasang paket "tools" yang sudah dihapus Google.
+      - name: Siapkan Android SDK bawaan runner
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "SDK di: $ANDROID_SDK_ROOT"
+          ls "$ANDROID_SDK_ROOT/platforms" || true
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -39,11 +45,10 @@ jobs:
       - name: Kumpulkan hasil
         run: |
           mkdir -p hasil
-          cp "$PROJ/phone/build/outputs/apk/debug/phone-debug.apk"     hasil/1-PASANG-DI-HP.apk
-          cp "$PROJ/glasses/build/outputs/apk/debug/glasses-debug.apk" hasil/2-PASANG-DI-KACAMATA.apk
-          cp "$PROJ/tools/pasang-ke-kacamata.bat" hasil/ || true
+          cp "$PROJ/phone/build/outputs/apk/debug/phone-debug.apk"     hasil/1-NalaHUD-HP.apk
+          cp "$PROJ/glasses/build/outputs/apk/debug/glasses-debug.apk" hasil/2-NalaHUD-KACAMATA.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: APK-PDF-ke-Rokid
+          name: APK-NalaHUD
           path: hasil/
