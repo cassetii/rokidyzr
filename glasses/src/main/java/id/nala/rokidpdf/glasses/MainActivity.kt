@@ -59,7 +59,7 @@ private object Hijau {
     val LINE_MUTED = tier(0x3D)                   // 24% — pembatas, jangan untuk makna penting
 }
 
-class MainActivity : Activity(), GlassesLink.Listener {
+class MainActivity : Activity(), GlassesLink.Listener, MacScreen.Listener {
 
     private lateinit var image: ImageView
     private lateinit var statusText: TextView
@@ -74,6 +74,11 @@ class MainActivity : Activity(), GlassesLink.Listener {
     private lateinit var renderer: PdfHudRenderer
 
     private var asking = false
+    /** Mode layar Mac aktif: HUD menampilkan potongan layar MacBook. */
+    private var macAktif = false
+    /** 0 = manual, 1 = ikut kursor mouse, 2 = ikut ketikan (default). */
+    private var macMode = 2
+    private var macZoom = 100
 
     // Touchpad Rokid sering mengirim kode ganda untuk satu gerakan -> perlu penahan.
     private var lastSwipeAt = 0L
@@ -171,6 +176,8 @@ class MainActivity : Activity(), GlassesLink.Listener {
 
         renderer = PdfHudRenderer(w, h) { bmp, v, count -> runOnUiThread { showSharpFrame(bmp, v, count) } }
 
+        MacScreen.listener = this
+        MacScreen.start(w, h)
         GlassesLink.listener = this
         // Selalu mulai. Kalau sistem menolak, GlassesLink memanggil onPermissionNeeded()
         // dan kita ajukan izin runtime saat itu juga, lalu proses mencoba lagi sendiri.
@@ -179,6 +186,8 @@ class MainActivity : Activity(), GlassesLink.Listener {
     }
 
     override fun onDestroy() {
+        MacScreen.listener = null
+        if (isFinishing) MacScreen.stop()
         GlassesLink.listener = null
         renderer.release()
         if (isFinishing) GlassesLink.stop()
@@ -290,6 +299,31 @@ class MainActivity : Activity(), GlassesLink.Listener {
         return sb
     }
 
+    // ---------- Layar MacBook ----------
+
+    override fun onMacStatus(text: String) {
+        if (!macAktif && !hasFrame) showStatus(text)
+    }
+
+    override fun onMacConnected(connected: Boolean) {
+        macAktif = connected
+        if (connected) {
+            showAsk(false)
+            statusText.visibility = View.GONE
+            showInfo("Layar Mac · ketuk = ganti mode ikut")
+        } else {
+            hasFrame = false
+            image.setImageDrawable(null)
+            infoText.visibility = View.GONE
+        }
+    }
+
+    override fun onMacFrame(bitmap: Bitmap) {
+        if (!macAktif) return
+        image.setImageBitmap(bitmap)
+        if (!hasFrame) { hasFrame = true; statusText.visibility = View.GONE }
+    }
+
     override fun onCfg(c: HudCfg) = applyCfg(c)
 
     private fun applyCfg(c: HudCfg) {
@@ -325,6 +359,12 @@ class MainActivity : Activity(), GlassesLink.Listener {
     }
 
     private fun ubahUkuran(delta: Float) {
+        if (macAktif) {                       // di mode Mac, volume mengatur zoom layar Mac
+            macZoom = (macZoom + (delta * 10).toInt()).coerceIn(50, 300)
+            MacScreen.kirimPerintah(MacScreen.CMD_ZOOM, macZoom)
+            showInfo("Zoom layar Mac $macZoom%")
+            return
+        }
         val sekarang = if (sizeOverride > 0f) sizeOverride else askAnswer.textSize / resources.displayMetrics.scaledDensity
         sizeOverride = (sekarang + delta).coerceIn(8f, 26f)
         terapkanUkuran(sizeOverride)
@@ -409,6 +449,19 @@ class MainActivity : Activity(), GlassesLink.Listener {
 
     /** Ketuk sekali: mulai/berhenti bicara (Mode Tanya). */
     private fun askPressed() {
+        if (macAktif) {
+            // Bergilir: ikut ketikan -> ikut kursor mouse -> manual (geser sendiri)
+            macMode = (macMode + 1) % 3
+            MacScreen.kirimPerintah(MacScreen.CMD_MODE_IKUT, macMode)
+            showInfo(
+                when (macMode) {
+                    2 -> "Ikut ketikan"
+                    1 -> "Ikut kursor mouse"
+                    else -> "Manual · swipe untuk geser"
+                }
+            )
+            return
+        }
         if (!GlassesLink.sendAsk(if (asking) Proto.ASK_STOP else Proto.ASK_START)) {
             showStatus("HP tidak terhubung")
             return

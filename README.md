@@ -202,6 +202,56 @@ Pengenalan suara memakai mesin bawaan Android dan butuh internet di HP.
 - **Ketukan touchpad tidak memicu tanya**: lihat kode tombol dengan `adb logcat | grep -i key`,
   lalu sesuaikan `onKeyUp`/`onKeyLongPress` di `glasses/.../MainActivity.kt`.
 
+## Mode Layar MacBook (versi 1.0)
+
+Menampilkan **potongan layar MacBook** di HUD lewat Wi-Fi, ukuran asli (1:1), mengikuti kursor.
+
+Kenapa potongan, bukan seluruh layar: HUD hanya 480 px. Seluruh layar Mac (1440 px) yang
+dikecilkan ke sana membuat teks jadi sepertiga ukuran asli dan tidak terbaca. Dengan 1:1, yang
+muat sekitar **55 karakter per baris, ±20 baris** — seperti jendela terminal kecil.
+
+**Di MacBook:**
+
+```bash
+pip install mss numpy                              # wajib
+pip install pyobjc-framework-Quartz                # opsional: ikut kursor mouse
+pip install pyobjc-framework-ApplicationServices   # opsional: ikut caret (paling akurat)
+python3 tools/mac-screen/nalahud_screen.py
+```
+
+`numpy` membuat pengolahan gambar ~38x lebih cepat (1,5 ms vs 57 ms per frame).
+Tanpa numpy tetap jalan, tapi fps turun dan CPU Mac bekerja keras.
+
+Saat pertama dijalankan, macOS meminta izin **Screen Recording** untuk Terminal
+(System Settings → Privacy & Security → Screen Recording).
+
+**Di kacamata:** buka Nala HUD. Kacamata menemukan alamat Mac sendiri lewat siaran UDP —
+tidak ada IP yang perlu diketik. Menjalankan skrip = mode menyala; menghentikannya = mode mati.
+
+| Kontrol di kacamata | Aksi |
+|---|---|
+| Ketuk tombol tengah | Ganti mode ikut: ketikan → kursor mouse → manual |
+| Swipe maju / mundur | Geser area layar (mode manual) |
+| Volume + / − | Zoom 50–300% |
+
+**Tiga mode ikut:**
+
+1. **Ikut ketikan** (default) — pandangan mengikuti tempat Anda mengetik, bukan mouse.
+   Dibaca dari posisi caret lewat Accessibility API macOS. Kalau aplikasi tidak mendukungnya
+   (sebagian Electron), otomatis beralih ke **deteksi perubahan layar**: bagian layar yang
+   berubah dicari dengan membandingkan tangkapan resolusi rendah, lalu pandangan diarahkan
+   ke sana. Cara ini bekerja di aplikasi apa pun. Diuji: meleset hanya 2 px dari posisi ketikan,
+   dan layar yang diam atau noise satu piksel tidak memicu perpindahan.
+2. **Ikut kursor mouse** — untuk membaca sambil menunjuk-nunjuk dengan mouse.
+3. **Manual** — pandangan diam, digeser sendiri dengan swipe.
+
+Pandangan diletakkan sedikit di atas titik fokus (sepertiga atas), supaya baris yang sedang
+Anda ketik tidak menempel di tepi bawah dan baris berikutnya tetap terlihat.
+
+Gambar dikirim dengan format yang sama seperti pratinjau PDF (16 tingkat abu-abu + Deflate).
+Satu layar penuh teks kode ≈ **15 KB**, jadi ±186 KB/detik pada 12 fps. Frame yang isinya
+tidak berubah tidak dikirim ulang, sehingga saat membaca kode yang diam, jaringan hampir senyap.
+
 ## Pemeriksa kode sebelum build (tanpa Android SDK)
 
 `tools/cek-kode.py` memindai kesalahan yang sering lolos saat menyunting kode secara terprogram:
